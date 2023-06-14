@@ -10,6 +10,9 @@ project(COMP8505_project
 
 set(HEADER_LIST
         "${PROJECT_SOURCE_DIR}/include/common.h"
+        "${PROJECT_SOURCE_DIR}/include/extern.h"
+        "${PROJECT_SOURCE_DIR}/include/victim.h"
+        "${PROJECT_SOURCE_DIR}/include/attacker.h"
         )
 
 set(COMMON_SOURCE_LIST
@@ -17,10 +20,11 @@ set(COMMON_SOURCE_LIST
         )
 
 set(ATTACKER_SOURCE_LIST
+        "${PROJECT_SOURCE_DIR}/src/attacker.c"
         )
 
 set(VICTIM_SOURCE_LIST
-
+        "${PROJECT_SOURCE_DIR}/src/victim.c"
         )
 
 

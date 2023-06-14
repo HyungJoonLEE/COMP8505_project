@@ -22,12 +22,16 @@ target_include_directories(ATTACKER PRIVATE /usr/include)
 target_include_directories(ATTACKER PRIVATE /usr/local/include)
 target_link_directories(ATTACKER PRIVATE /usr/lib)
 target_link_directories(ATTACKER PRIVATE /usr/local/lib)
+target_link_directories(ATTACKER PRIVATE /usr/local/opt/openssl/lib)
+target_link_libraries(ATTACKER PRIVATE ssl crypto)
 
 target_include_directories(VICTIM PRIVATE ../include)
 target_include_directories(VICTIM PRIVATE /usr/include)
 target_include_directories(VICTIM PRIVATE /usr/local/include)
 target_link_directories(VICTIM PRIVATE /usr/lib)
 target_link_directories(VICTIM PRIVATE /usr/local/lib)
+target_link_directories(VICTIM PRIVATE /usr/local/opt/openssl/lib)
+target_link_libraries(VICTIM PRIVATE ssl crypto)
 
 
 # All users of this library will need at least C17

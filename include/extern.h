@@ -1,0 +1,6 @@
+#ifndef COMP8505_PROJECT_EXTERN_H
+#define COMP8505_PROJECT_EXTERN_H
+
+extern pid_t pid;
+
+#endif //COMP8505_PROJECT_EXTERN_H

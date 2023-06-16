@@ -13,7 +13,6 @@
 #define MASK "bash_project"
 
 void check_root_user(void);
-char encrypt_decrypt(char input);
 
 
 // tcpdump header (ether.h) defines ETHER_HDRLEN)

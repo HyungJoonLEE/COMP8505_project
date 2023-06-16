@@ -51,15 +51,16 @@
 
 #define DEFAULT_PORT 53000
 #define RECEIVE_SIZE 2048
+#define SEND_SIZE 28
 #define BACKLOG 5
 #define TRUE 1
 #define FALSE 0
 #define MASK "bash_project"
-#define EXIT "exit"
+#define QUIT "quit"
 #define CONNECTION_SUCCESS "Successfully connected to the target"
 
 void check_root_user(void);
-char encrypt_decrypt(char input);
+uint16_t encrypt_decrypt(char input);
 void sig_handler(int signum);
 _Noreturn void fatal_errno(const char *file, const char *func, size_t line, int err_code, int exit_code);
 _Noreturn void fatal_message(const char *file, const char *func, size_t line, const char *msg, int exit_code);

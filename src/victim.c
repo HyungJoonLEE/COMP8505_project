@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
                 if (i == opts.victim_socket) {
                     recvfrom(opts.victim_socket, receive, sizeof(receive), 0, (struct sockaddr*)&attacker_address, &attacker_address_size);
                     printf("PACKET = [ %s ]\n", receive);
-                    if (strcmp(receive, EXIT) == 0) {
+                    if (strcmp(receive, QUIT) == 0) {
                         printf("EXIT program");
                         exit_flag = 1;
                         break;

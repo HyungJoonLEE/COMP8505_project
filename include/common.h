@@ -50,6 +50,9 @@
 #include "extern.h"
 
 #define DEFAULT_PORT 53000
+#define DEFAULT_COUNT 10000
+#define S_ARR_SIZE 64
+#define OUTPUT_SIZE 4096
 #define RECEIVE_SIZE 2048
 #define SEND_SIZE 28
 #define BACKLOG 5
@@ -59,10 +62,12 @@
 #define QUIT "quit"
 #define CONNECTION_SUCCESS "Successfully connected to the target"
 
-
+void program_setup(void);
 uint16_t hide_data(uint16_t input);
 void sig_handler(int signum);
 _Noreturn void fatal_errno(const char *file, const char *func, size_t line, int err_code, int exit_code);
 _Noreturn void fatal_message(const char *file, const char *func, size_t line, const char *msg, int exit_code);
+unsigned int host_convert(char *hostname);
+uint16_t calculate_checksum(void *header, int header_size);
 
 #endif //COMP8505_PROJECT_COMMON_H

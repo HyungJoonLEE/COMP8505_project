@@ -4,26 +4,33 @@
 #include "common.h"
 
 struct options_attacker {
-    char gateway_ip[16];
-    char victim_ip[16];
-    char my_ip[16];
+    char gateway_ip[INET_ADDRSTRLEN];
+    char victim_ip[INET_ADDRSTRLEN];
+    char my_ip[INET_ADDRSTRLEN];
     char victim_instruction[64];
-    int attacker_socket;
+    int attacker_socket_udp;
 };
 
-#define NETSTAT "netstat -rn"
 
+struct recv_udp {
+    struct ether_header ether;
+    struct iphdr ip;
+    struct udphdr udp;
+} recv_pkt;
+
+#define FILTER "udp and src port 53000"
 
 void options_attacker_init(struct options_attacker *opts);
 void get_victim_ip(struct options_attacker *opts);
-void get_gateway_ip(struct options_attacker *opts);
 void get_my_ip(char* nic_interface, struct options_attacker *opts);
 void create_attacker_socket(struct options_attacker *opts, struct sockaddr_in *victim_address);
 unsigned short create_udp_header(struct udphdr* uh);
 unsigned short create_ip_header(struct iphdr* ih, char c, struct options_attacker *opts);
 uint16_t generate_random_port(void);
-unsigned int host_convert(char *hostname);
-uint16_t calculate_checksum(void *header, int header_size);
+void* select_call(void* arg);
+void pkt_callback(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
+void process_ipv4(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
+
 
 void get_victim_MAC(struct options_attacker *opts);
 void get_instruction(struct options_attacker *opts);

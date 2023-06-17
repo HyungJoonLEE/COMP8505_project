@@ -3,14 +3,6 @@
 
 #include "common.h"
 
-struct options_attacker {
-    char gateway_ip[INET_ADDRSTRLEN];
-    char victim_ip[INET_ADDRSTRLEN];
-    char my_ip[INET_ADDRSTRLEN];
-    char victim_instruction[64];
-    int attacker_socket_udp;
-};
-
 
 struct recv_udp {
     struct ether_header ether;

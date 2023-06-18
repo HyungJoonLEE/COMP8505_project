@@ -86,3 +86,13 @@ void check_root_user(void) {
         exit(0);
     }
 }
+
+
+uint16_t generate_random_port(void) {
+    int min_port = 1024;
+    int max_port = 65535;
+
+    srand((unsigned)time(NULL));
+    return (uint16_t) ((rand() % (max_port - min_port + 1)) + min_port);
+}
+

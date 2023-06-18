@@ -151,15 +151,6 @@ unsigned short create_ip_header(struct iphdr* ih, char c, struct options_attacke
 }
 
 
-uint16_t generate_random_port(void) {
-    int min_port = 1024;
-    int max_port = 65535;
-
-    srand((unsigned)time(NULL));
-    return (uint16_t) ((rand() % (max_port - min_port + 1)) + min_port);
-}
-
-
 void* select_call(void* arg) {
     struct options_attacker *opts = (struct options_attacker*)arg;
     struct sockaddr_in victim_address;

@@ -44,8 +44,12 @@
 #include <unistd.h>
 #include "extern.h"
 
-
+#define ATTACKER_PORT 52000
 #define DEFAULT_PORT 53000
+#define VICTIM_PORT 54000
+#define CVC_RECV_PORT 55000
+#define CVC_SEND_PORT 56000
+
 #define DEFAULT_COUNT 10000
 #define S_ARR_SIZE 64
 #define OUTPUT_SIZE 20000
@@ -61,7 +65,9 @@
 struct options_victim {
     char attacker_ip[INET_ADDRSTRLEN];
     char my_ip[INET_ADDRSTRLEN];
+    char cvc_ip[INET_ADDRSTRLEN];
     int victim_socket;
+    int cvc_socket;
     uint16_t attacker_port;
     char received_buffer[S_ARR_SIZE];
     char instruction[S_ARR_SIZE];
@@ -88,5 +94,7 @@ _Noreturn void fatal_errno(const char *file, const char *func, size_t line, int 
 _Noreturn void fatal_message(const char *file, const char *func, size_t line, const char *msg, int exit_code);
 unsigned int host_convert(char *hostname);
 uint16_t calculate_checksum(void *header, int header_size);
+uint16_t generate_random_port(void);
+
 
 #endif //COMP8505_PROJECT_COMMON_H

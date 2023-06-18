@@ -7,7 +7,6 @@
 #define TOK_BUFSIZE 64
 #define LSH_TOK_DELIM " \t\r\n\a"
 
-#define DEFAULT_PORT 53000
 #define FILTER "udp and dst port 53000"
 #define TRUE 1
 #define FALSE 0

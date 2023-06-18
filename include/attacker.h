@@ -3,13 +3,6 @@
 
 #include "common.h"
 
-
-struct recv_udp {
-    struct ether_header ether;
-    struct iphdr ip;
-    struct udphdr udp;
-} recv_pkt;
-
 #define FILTER "udp and src port 53000"
 
 void options_attacker_init(struct options_attacker *opts);

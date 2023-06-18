@@ -1,6 +1,7 @@
 #include "common.h"
 #include "extern.h"
 
+pid_t pid;
 
 void program_setup(void) {
     /* change the UID/GID to 0 (raise privilege) */

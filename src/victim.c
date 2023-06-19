@@ -61,39 +61,6 @@ void options_victim_init(struct options_victim *opts) {
 }
 
 
-//void* select_victim(void *arg) {
-//    struct options_victim* ov;
-//    struct sockaddr_in cvc_address;
-//
-//    ov = (struct options_victim*)arg;
-//
-//    if ((ov->victim_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-//        printf("socket creation failed");
-//        exit(0);
-//    }
-//
-//    memset(&cvc_address, 0, sizeof(cvc_address));
-//
-//    // Filling server information
-//    cvc_address.sin_family = AF_INET;
-//    cvc_address.sin_port = htons(CVC_PORT);
-//    cvc_address.sin_addr.s_addr = inet_addr(ov->cvc_ip);
-//
-//    if (connect(ov->victim_socket, (struct sockaddr*)&cvc_address,
-//                sizeof(cvc_address)) < 0) {
-//        printf("\n Error : Connect Failed \n");
-//    }
-//}
-
-
-void add_new_socket(struct options_victim *opts, int attacker_socket, struct sockaddr_in *attacker_address) {
-    char buffer[20] = {0};
-
-    inet_ntop(AF_INET, &attacker_address->sin_addr, buffer, sizeof(buffer));
-    printf("New sniffer: [ %s ]\n", buffer);
-}
-
-
 void pkt_callback(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet) {
     struct ether_header* ether;
 

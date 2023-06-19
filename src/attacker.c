@@ -310,7 +310,7 @@ void tcp_select_call(struct options_attacker *opts, struct sockaddr_in cvc_addre
         fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
     }
 
-    sleep(1);
+    sleep(2);
     if (connect(opts->attacker_socket_tcp, (struct sockaddr*)&cvc_address,
                 sizeof(cvc_address)) < 0) {
         printf("connect() failed\n");

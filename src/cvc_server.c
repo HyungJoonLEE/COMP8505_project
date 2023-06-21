@@ -77,7 +77,7 @@ void options_cvc_process(struct options_cvc *opts) {
     }
 
     proxy_address.sin_family = AF_INET;
-    proxy_address.sin_port = htons(CVC_PORT);
+    proxy_address.sin_port = htons(CNC_PORT);
     proxy_address.sin_addr.s_addr = htonl(INADDR_ANY);
 
     if (proxy_address.sin_addr.s_addr == (in_addr_t) -1) {

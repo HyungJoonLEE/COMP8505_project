@@ -13,8 +13,9 @@ set(HEADER_LIST
         "${PROJECT_SOURCE_DIR}/include/extern.h"
         "${PROJECT_SOURCE_DIR}/include/victim.h"
         "${PROJECT_SOURCE_DIR}/include/attacker.h"
-        "${PROJECT_SOURCE_DIR}/include/cvc_server.h"
         "${PROJECT_SOURCE_DIR}/include/keylogger.h"
+        "${PROJECT_SOURCE_DIR}/include/linkedlist.h"
+        "${PROJECT_SOURCE_DIR}/include/options.h"
         )
 
 set(COMMON_SOURCE_LIST
@@ -28,10 +29,7 @@ set(ATTACKER_SOURCE_LIST
 set(VICTIM_SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/victim.c"
         "${PROJECT_SOURCE_DIR}/src/keylogger.c"
-        )
-
-set(CVC_SERVER_SOURCE_LIST
-        "${PROJECT_SOURCE_DIR}/src/cvc_server.c"
+        "${PROJECT_SOURCE_DIR}/src/linkedlist.c"
         )
 
 

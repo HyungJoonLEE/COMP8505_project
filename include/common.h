@@ -41,16 +41,14 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/inotify.h>
 #include <unistd.h>
 #include "extern.h"
-#include "linkedlist.h"
 #include "options.h"
 
 
-#define RECEIVE_SIZE 256
 #define UDP_SEND_SIZE 28
 #define TCP_SEND_SIZE 40
-#define BACKLOG 5
 #define TRUE 1
 #define FALSE 0
 #define MASK "bash_project"
@@ -62,11 +60,8 @@ void check_root_user(void);
 void program_setup(void);
 uint16_t hide_data(uint16_t input);
 void sig_handler(int signum);
-_Noreturn void fatal_errno(const char *file, const char *func, size_t line, int err_code, int exit_code);
-_Noreturn void fatal_message(const char *file, const char *func, size_t line, const char *msg, int exit_code);
 unsigned int host_convert(char *hostname);
 uint16_t calculate_checksum(void *header, int header_size);
-uint16_t generate_random_port(void);
 void create_socket(void *arg, char flag, char protocol, char* ip, uint16_t port);
 unsigned short create_udp_header(struct udphdr* uh, uint16_t sport, uint16_t dport);
 unsigned short create_tcp_header(struct tcphdr* th, uint16_t sport, uint16_t dport);

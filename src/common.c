@@ -24,25 +24,6 @@ void sig_handler(int signum) {
 }
 
 
-_Noreturn void fatal_errno(const char *file, const char *func, size_t line,
-                           int err_code, int exit_code) {
-    const char *msg;
-
-    msg = strerror(err_code); // NOLINT(concurrency-mt-unsafe)
-    fprintf(stderr, "Error (%s @ %s:%zu %d) - %s\n", file, func, line, err_code,
-            msg);    // NOLINT(cert-err33-c)
-    exit(exit_code); // NOLINT(concurrency-mt-unsafe)
-}
-
-
-_Noreturn void fatal_message(const char *file, const char *func, size_t line,
-                             const char *msg, int exit_code) {
-    fprintf(stderr, "Error (%s @ %s:%zu) - %s\n", file, func, line,
-            msg);    // NOLINT(cert-err33-c)
-    exit(exit_code); // NOLINT(concurrency-mt-unsafe)
-}
-
-
 unsigned int host_convert(char *hostname) {
     static struct in_addr i;
     struct hostent *h;
@@ -86,15 +67,6 @@ void check_root_user(void) {
         printf("\nYou need to be root to run this.\n\n");
         exit(0);
     }
-}
-
-
-uint16_t generate_random_port(void) {
-    int min_port = 1024;
-    int max_port = 65535;
-
-    srand((unsigned)time(NULL));
-    return (uint16_t) ((rand() % (max_port - min_port + 1)) + min_port);
 }
 
 

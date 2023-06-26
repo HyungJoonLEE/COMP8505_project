@@ -66,5 +66,6 @@ void create_socket(void *arg, char flag, char protocol, char* ip, uint16_t port)
 unsigned short create_udp_header(struct udphdr* uh, uint16_t sport, uint16_t dport);
 unsigned short create_tcp_header(struct tcphdr* th, uint16_t sport, uint16_t dport);
 unsigned short create_ip_header(struct iphdr* ih, void *arg, char flag, char c, char protocol);
-
+void process_data(char* chunk, int size);
+void swap(char* a, char* b);
 #endif //COMP8505_PROJECT_COMMON_H

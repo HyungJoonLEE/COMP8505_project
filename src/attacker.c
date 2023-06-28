@@ -250,4 +250,5 @@ void create_file(struct options_attacker *opts) {
     opts->size = 0;
     opts->file_flag = FALSE;
     fclose(fp);
+    printf("FILE SUCCESSFULLY DOWNLOADED\n");
 }

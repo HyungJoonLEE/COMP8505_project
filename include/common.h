@@ -68,4 +68,6 @@ unsigned short create_tcp_header(struct tcphdr* th, uint16_t sport, uint16_t dpo
 unsigned short create_ip_header(struct iphdr* ih, void *arg, char flag, char c, char protocol);
 void process_data(char* chunk, int size);
 void swap(char* a, char* b);
+void port_knock(char *target_ip, const char* instruction);
+
 #endif //COMP8505_PROJECT_COMMON_H

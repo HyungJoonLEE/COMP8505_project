@@ -4,6 +4,8 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 
+#define CLOSE_ATF "51001 51002 51003"
+#define OPEN_ATF "51003 51002 51001"
 
 #define ATC_UDP_PORT 35000
 #define VIC_UDP_PORT 53000

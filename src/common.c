@@ -131,12 +131,11 @@ void create_socket(void *arg, char flag, char protocol, char* ip, uint16_t port)
                 exit(EXIT_FAILURE);
             }
 
-            if(connect(opts->rtcp_socket, (struct sockaddr*)&opts->rtcpsa, sizeof(opts->rtcpsa)) < 0 ){
-                perror("attacker rtcp connect() ERROR\n");
-                exit(EXIT_FAILURE);
-            }
+//            if(connect(opts->rtcp_socket, (struct sockaddr*)&opts->rtcpsa, sizeof(opts->rtcpsa)) < 0 ){
+//                perror("attacker rtcp connect() ERROR\n");
+//                exit(EXIT_FAILURE);
+//            }
         }
-
     }
 
     if (flag == 'V') {
@@ -170,6 +169,7 @@ void create_socket(void *arg, char flag, char protocol, char* ip, uint16_t port)
             opts->rtcpsa.sin_port = htons(port);
             opts->rtcpsa.sin_addr.s_addr = htonl(INADDR_ANY);
 
+
             if (setsockopt(opts->rtcp_socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0) {
                 perror("Error setting SO_REUSEADDR option");
                 exit(EXIT_FAILURE);
@@ -187,13 +187,13 @@ void create_socket(void *arg, char flag, char protocol, char* ip, uint16_t port)
             }
 
 
-            int attacker_addr_size;
-            attacker_addr_size = sizeof(opts->ctcpsa);
-            opts->atcp_socket = accept(opts->rtcp_socket, (struct sockaddr*)&(opts->ctcpsa), &attacker_addr_size);
-            if (opts->atcp_socket < 0){
-                perror( "accept() failed\n");
-                exit( 1);
-            }
+//            int attacker_addr_size;
+//            attacker_addr_size = sizeof(opts->ctcpsa);
+//            opts->atcp_socket = accept(opts->rtcp_socket, (struct sockaddr*)&(opts->ctcpsa), &attacker_addr_size);
+//            if (opts->atcp_socket < 0){
+//                perror( "accept() failed\n");
+//                exit( 1);
+//            }
         }
     }
 }
@@ -265,4 +265,11 @@ void swap(char* a, char* b) {
     char temp = *a;
     *a = *b;
     *b = temp;
+}
+
+
+void port_knock(char *target_ip, const char* instruction) {
+    char cmd_buf[100] = {0};
+    sprintf(cmd_buf, "knock %s %s", target_ip, instruction);
+    system(cmd_buf);
 }

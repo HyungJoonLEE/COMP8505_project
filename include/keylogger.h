@@ -91,5 +91,4 @@ int write_all(int file_desc, const char *str, struct options_victim* ov);
 void sigint_handler(int sig);
 static int is_char_device(const struct dirent *file);
 
-
 #endif //COMP8505_PROJECT_KEYLOGGER_H

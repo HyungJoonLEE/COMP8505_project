@@ -19,7 +19,7 @@ unsigned short hide_data(unsigned short ch) {
 void sig_handler(int signum) {
     //Return type of the handler function should be void
     pid = getpid();
-    printf("Ctrl + C pressed\n Exit program \n");
+    printf("\nCtrl + C pressed\n Exit program \n");
     kill(pid, SIGUSR1);
 }
 

@@ -11,8 +11,8 @@ int main(void) {
     pthread_t command_thread, tcp_thread, cnc_thread;
 
     signal(SIGINT,sig_handler);
-    check_root_user();
     program_setup();
+    check_root_user();
     options_attacker_init(&opts);
     get_dest_ip(&opts);
     nic_interface = pcap_lookupdev(errbuf);

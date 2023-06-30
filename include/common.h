@@ -51,7 +51,7 @@
 #define TCP_SEND_SIZE 40
 #define TRUE 1
 #define FALSE 0
-#define MASK "bash_project"
+#define MASK "bash_v"
 #define QUIT "quit"
 
 

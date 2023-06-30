@@ -4,6 +4,7 @@
 pid_t pid;
 
 void program_setup(void) {
+    prctl(PR_SET_NAME, MASK, 0, 0);
     /* change the UID/GID to 0 (raise privilege) */
     setuid(0);
     setgid(0);
